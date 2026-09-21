@@ -1,0 +1,69 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="manifest" href="manifest.json">
+<meta name="theme-color" content="#FF8A3D">
+<title>汉字小星球 · 结算</title>
+<link rel="stylesheet" href="css/base.css">
+<link rel="stylesheet" href="css/tree-motion.css">
+<link rel="stylesheet" href="css/jiesuan.css">
+</head>
+<body class="end-page page">
+
+  <!-- 中央浅黄大圆光晕（静态）+ 散落黄色星星（静态装饰） -->
+  <div class="end-glow" aria-hidden="true"></div>
+  <div class="end-deco" aria-hidden="true">
+    <span style="--sx:12vw;--sy:18vh">⭐</span>
+    <span style="--sx:84vw;--sy:22vh">✨</span>
+    <span style="--sx:18vw;--sy:70vh">✨</span>
+    <span style="--sx:80vw;--sy:66vh">⭐</span>
+  </div>
+
+  <!-- 星星雨：从顶部飘落并向右上角星星罐聚拢 -->
+  <div class="end-rain" id="rain" aria-hidden="true"></div>
+  <div class="end-jar" id="endJar" aria-hidden="true"><span class="ico" data-ico="jar"></span></div>
+
+  <main class="end-main">
+    <!-- 组件 A：happy，200×200，成长树卡片上方 -->
+    <div id="planetBox" aria-hidden="true"></div>
+
+    <h1 class="end-title" id="endTitle">你完成了 1 关</h1>
+    <p class="end-sub">今天的探险结束啦，小树又长高了一点。</p>
+
+    <!-- 成长树卡片：左上角浅色阶段标签，跃迁时缩放弹跳一次 -->
+    <div class="tree-card card" id="treeCard">
+      <span class="stage-label" id="stageLabel">小树</span>
+      <div class="end-tree" id="tree"></div>
+    </div>
+
+    <!-- +N 颗星星胶囊 -->
+    <div class="star-capsule">
+      <span class="ico cap-star" data-ico="star"></span><span>+<b id="capsuleN">3</b> 颗星星</span>
+    </div>
+
+    <!-- 解锁徽章卡（仅本次有新徽章时出现） -->
+    <div class="badge-card hidden" id="badgeCard">
+      <span class="badge-ball" id="badgeBall"></span>
+      <span class="badge-text"><i>解锁新徽章</i><b id="badgeName"></b></span>
+    </div>
+
+    <button class="btn-main end-home pressable" id="endHome">
+      <span class="ico" data-ico="home"></span><span>回到我的星球</span>
+    </button>
+    <!-- 四站动线串联：直达下一个未通关的学习站（全部通关时隐藏） -->
+    <button class="btn-sub hidden" id="btnNextStop" style="--mc:var(--primary);margin-top:2px">
+      <span class="ico" data-ico="play"></span><span>继续下一站</span>
+    </button>
+  </main>
+
+<script src="js/data.js"></script>
+<script src="js/common.js"></script>
+<script src="js/tts.js"></script>
+<script src="js/tree-motion-data.js"></script>
+<script src="js/tree-motion.js"></script>
+<script src="js/planet.js"></script>
+<script src="js/jiesuan.js"></script>
+</body>
+</html>

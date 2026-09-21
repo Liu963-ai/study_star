@@ -1,0 +1,80 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="manifest" href="manifest.json">
+<meta name="theme-color" content="#FF8A3D">
+<title>汉字小星球 · 词语乐园</title>
+<link rel="stylesheet" href="css/base.css">
+<link rel="stylesheet" href="css/jushi.css">
+</head>
+<body class="page" style="--mc:var(--primary)">
+
+  <!-- 顶栏：返回 + 步骤点（第 4 点亮） -->
+  <header class="learn-bar">
+    <button class="back-btn pressable" data-say="回首页"><span class="ico" data-ico="back"></span></button>
+    <div class="step-dots" aria-hidden="true">
+      <span class="sdot"></span><span class="sdot"></span><span class="sdot"></span><span class="sdot on"></span><span class="sdot"></span>
+    </div>
+  </header>
+
+  <!-- ===== 顶部状态条（§6.0 全局框架，头像位＝笑脸图标）===== -->
+  <header class="topbar">
+    <span class="avatar-smile ico" data-ico="smile" aria-hidden="true"></span>
+    <button class="star-pill pressable">⭐ <b data-star-count>0</b></button>
+    <span class="topbar-space"></span>
+    <button class="icon-btn btn-volume pressable" aria-label="音量开关"></button>
+  </header>
+
+  <main class="js-main">
+    <!-- 轮次进度：第几题 / 共几题 -->
+    <p class="js-round" id="jsRound"></p>
+
+    <!-- 拼出的整句（三槽填满后出现）+ 再拼一句（同排，免滚动可见） -->
+    <p class="js-sentence hidden" id="jsSentence"></p>
+    <button class="btn-main pressable hidden" id="btnAgain">
+      <span class="ico" data-ico="replay"></span><span>再拼一句</span>
+    </button>
+
+    <!-- 句式框架卡：三个凹槽 + 类型标注 + 场景插画位 -->
+    <div class="frame-card card">
+      <div class="js-slots">
+        <div class="slot-box" data-slot="who">
+          <div class="slot" data-type="who"><span class="slot-hint">把积木放到这里</span></div>
+          <span class="slot-label who">[谁]</span>
+        </div>
+        <div class="slot-box" data-slot="where">
+          <div class="slot" data-type="where"><span class="slot-hint">把积木放到这里</span></div>
+          <span class="slot-label where">[在哪里]</span>
+        </div>
+        <div class="slot-box" data-slot="what">
+          <div class="slot" data-type="what"><span class="slot-hint">把积木放到这里</span></div>
+          <span class="slot-label what">[做什么]</span>
+        </div>
+      </div>
+      <div class="scene hidden" id="scene"></div>
+    </div>
+
+    <!-- 积木区（js/jushi.js 按轮次生成彩色积木） -->
+    <div class="tray" id="tray"></div>
+  </main>
+
+  <!-- ===== 底部导航：5 个 SVG 线性图标，无文字 ===== -->
+  <footer class="navbar">
+    <button class="nav-btn pressable" data-href="home.html" data-say="回首页"><span class="ico" data-ico="home"></span></button>
+    <button class="nav-btn pressable" data-href="ditu.html" data-say="闯关地图"><span class="ico" data-ico="map"></span></button>
+    <button class="nav-btn pressable is-current" data-say="继续探险"><span class="ico" data-ico="mic"></span></button>
+    <button class="nav-btn pressable" data-href="jiangli.html" data-say="星星罐"><span class="ico" data-ico="jar"></span></button>
+    <button class="nav-btn nav-lock pressable" data-href="parent.html"><span class="ico" data-ico="lock"></span></button>
+  </footer>
+
+
+<script src="js/data.js"></script>
+<script src="js/common.js"></script>
+<script src="js/report.js"></script>
+<script src="js/tts.js"></script>
+<script src="js/planner.js"></script>
+<script src="js/jushi.js"></script>
+</body>
+</html>

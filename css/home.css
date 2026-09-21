@@ -1,0 +1,96 @@
+/* ============================================================
+   学生端首页 · home.css（任务书 §6.2）
+   运动元素仅 2 类：组件 B 成长树摆动 + 组件 A 视频呼吸。
+   ============================================================ */
+
+.topbar-space{ flex:1; }
+
+/* 头像位：组件 A 56×56，容器裁圆（容器裁切，非裁视频） */
+.avatar-planet{
+  width:56px; height:56px; border-radius:50%;
+  overflow:hidden; flex:none;
+  box-shadow:var(--shadow-soft);
+}
+.avatar-planet .hh-planet{ width:56px !important; height:56px !important; }
+
+/* ---- 主列 ---- */
+.home-main{
+  height:calc(100vh - 76px - 100px);
+  min-height:520px;
+  display:flex; flex-direction:column;
+  align-items:center; justify-content:flex-start;
+  gap:12px; padding:8px 24px 16px;
+}
+
+/* 语音问候气泡 */
+.greet{
+  display:inline-flex; align-items:center; gap:10px;
+  background:var(--card); border-radius:999px;
+  padding:8px 22px; font-size:22px; font-weight:bold; color:var(--text);
+  box-shadow:var(--shadow-card);
+  animation:greetIn .3s ease-out both;
+}
+.greet-ico{ width:24px; height:24px; color:var(--primary); }
+@keyframes greetIn{ from{ transform:translateY(-8px); opacity:0; } }
+
+/* 中央成长树：约占屏 35%（768×0.35≈270px），水平居中 */
+.tree-wrap{ flex:1; display:flex; align-items:center; justify-content:center; width:100%; min-height:0; }
+.tree{ height:100%; max-height:280px; aspect-ratio:1/1; }
+.tree .gtm{ pointer-events:none; }
+
+/* ---- 今日小任务 ---- */
+.tasks-title{
+  font-size:22px; font-weight:bold; color:var(--text-soft);
+  letter-spacing:2px;
+}
+.tasks{ display:flex; gap:22px; }
+.task{
+  display:flex; align-items:center; gap:10px;
+  background:var(--card); border-radius:999px;
+  padding:10px 20px; box-shadow:var(--shadow-card);
+  position:relative;
+}
+.task-ico{ width:34px; height:34px; color:var(--text-soft); }
+.task-name{ font-size:21px; font-weight:bold; color:var(--text); }
+.task-ring{
+  width:28px; height:28px; border-radius:50%;
+  border:3px solid rgba(62,39,35,.22);
+  display:flex; align-items:center; justify-content:center;
+  font-size:16px;
+}
+/* 完成态：实心 --ok 勾选圈 + 卡片轻微缩小 */
+.task.done{ transform:scale(.96); }
+.task.done .task-ring{ border-color:var(--ok); background:var(--ok); }
+.task.done .task-ring::after{
+  content:""; width:12px; height:7px;
+  border-left:3px solid #fff; border-bottom:3px solid #fff;
+  transform:rotate(-45deg) translate(1px,-2px);
+}
+
+/* ---- 四大模块按钮 ---- */
+.modules{ display:flex; gap:26px; flex-wrap:wrap; justify-content:center; }
+.module{
+  width:186px; height:186px; border-radius:var(--radius-module);
+  background:linear-gradient(160deg, var(--mc2), var(--mc));
+  box-shadow:var(--shadow-soft);
+  display:flex; flex-direction:column; align-items:center; justify-content:center; gap:6px;
+}
+.module-ico{ width:84px; height:84px; color:#fff; }
+.module-name{ font-size:28px; font-weight:bold; color:#fff; letter-spacing:2px; }
+/* 底部 7 个进度小点：已通关填实 */
+.module-dots{ display:flex; gap:7px; height:10px; }
+.module-dots .pd{
+  width:10px; height:10px; border-radius:50%;
+  background:rgba(255,255,255,.38);
+}
+.module-dots .pd.full{ background:#fff; }
+
+/* ---- 窄屏：按钮 2×2，树缩小，字不缩 ---- */
+@media (max-width:860px){
+  .modules{ max-width:430px; }
+  .module{ width:44vw; height:44vw; max-width:186px; max-height:186px; }
+  .module-ico{ width:64px; height:64px; }
+  .home-main{ height:auto; min-height:0; padding-bottom:120px; }
+  .tree-wrap{ min-height:220px; }
+  .tree{ height:220px; }
+}

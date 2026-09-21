@@ -1,0 +1,48 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="manifest" href="manifest.json">
+<meta name="theme-color" content="#FF8A3D">
+<title>汉字小星球</title>
+<link rel="stylesheet" href="css/base.css">
+<link rel="stylesheet" href="css/splash.css">
+</head>
+<body class="page">
+
+  <!-- 背景装饰：2 处静态柔光 + 6 个极缓慢浮动的星点（第 2 类运动元素） -->
+  <div class="glow glow-a" aria-hidden="true"></div>
+  <div class="glow glow-b" aria-hidden="true"></div>
+  <div class="sparks" aria-hidden="true">
+    <span style="--sx:10vw;--sy:14vh;--ss:18px;--sd:0s"></span>
+    <span style="--sx:86vw;--sy:12vh;--ss:14px;--sd:.7s"></span>
+    <span style="--sx:14vw;--sy:76vh;--ss:22px;--sd:1.3s"></span>
+    <span style="--sx:82vw;--sy:70vh;--ss:16px;--sd:1.9s"></span>
+    <span style="--sx:66vw;--sy:22vh;--ss:12px;--sd:2.5s"></span>
+    <span style="--sx:30vw;--sy:28vh;--ss:15px;--sd:3.1s"></span>
+  </div>
+
+  <!-- 主视觉：组件 A（smile，260×260）+ 标题 + 副标题 + 开始按钮 -->
+  <main class="splash-main">
+    <div id="planetBox" aria-hidden="true"></div>
+    <h1 class="splash-title">汉字小星球</h1>
+    <p class="splash-sub">每天 15 分钟 · 四站式语文探险</p>
+    <button class="btn-start pressable" id="btnStart">
+      <span class="ico start-ico" data-ico="play"></span><span>开始探险</span>
+    </button>
+  </main>
+
+  <!-- 左下家长入口（点击不播报语音）＋ 右下音量 -->
+  <button class="splash-parent" data-href="parent.html">
+    <span class="ico parent-ico" data-ico="lock"></span><span>家长入口</span>
+  </button>
+  <button class="icon-btn btn-volume pressable splash-volume" aria-label="音量开关"></button>
+
+<script src="js/data.js"></script>
+<script src="js/common.js"></script>
+<script src="js/tts.js"></script>
+<script src="js/planet.js"></script>
+<script src="js/splash.js"></script>
+</body>
+</html>

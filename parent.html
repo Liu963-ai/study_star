@@ -1,0 +1,141 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="manifest" href="manifest.json">
+<meta name="theme-color" content="#FF8A3D">
+<title>汉字小星球 · 家长中心</title>
+<link rel="stylesheet" href="css/base.css">
+<link rel="stylesheet" href="css/parent.css">
+<link rel="stylesheet" href="css/voice.css">
+</head>
+<body class="page parent-page">
+
+  <!-- ===== 家长验证门禁（弹层，任务书 §6.10）===== -->
+  <div class="gate" id="gate">
+    <div class="gate-card">
+      <h2 class="gate-title">家长验证</h2>
+      <p class="gate-desc">家长区域，请先回答一道算术题。</p>
+      <div class="gate-quiz" id="gateQuiz">7 + 5 = ?</div>
+      <input class="gate-input" id="gateInput" readonly aria-label="答案">
+      <div class="gate-pad" id="gatePad">
+        <button data-k="1">1</button><button data-k="2">2</button><button data-k="3">3</button>
+        <button data-k="4">4</button><button data-k="5">5</button><button data-k="6">6</button>
+        <button data-k="7">7</button><button data-k="8">8</button><button data-k="9">9</button>
+        <button data-k="clear" class="dim">清空</button><button data-k="0">0</button><button data-k="del" class="dim">退格</button>
+      </div>
+      <button class="gate-cancel" id="gateCancel">取消</button>
+    </div>
+  </div>
+
+  <!-- ===== 三屏报告主内容（任务书 §6.11）===== -->
+  <main class="rep" id="report">
+    <header class="rep-top">
+      <button class="back-btn pressable" aria-label="返回"><span class="ico" data-ico="back"></span></button>
+      <h2 class="rep-title" id="repTitle">今天的记录</h2>
+      <div class="rep-dots" id="repDots">
+        <button class="rdot on" data-s="0" aria-label="第 1 屏"></button>
+        <button class="rdot" data-s="1" aria-label="第 2 屏"></button>
+        <button class="rdot" data-s="2" aria-label="第 3 屏"></button>
+      </div>
+    </header>
+
+    <!-- 第 1 屏：今天的记录 -->
+    <section class="rs on" data-rs="0">
+      <div class="p-card">
+        <h3>今天的记录</h3>
+        <div class="kv"><span>学习时长</span><b id="kvMin"></b></div>
+        <div class="kv"><span>新认识的字</span><b id="kvChars"></b></div>
+        <div class="kv"><span>四站探险完成</span><b id="kvStations"></b></div>
+      </div>
+      <div class="p-card">
+        <h3>今天读了什么</h3>
+        <div class="read-row">
+          <span class="read-name" id="readTitle"></span>
+          <button class="p-btn" id="btnPlayRead">▶ 听孩子读的</button>
+        </div>
+      </div>
+      <p class="p-foot">家长端只呈现趋势与方向，不呈现逐题对错明细。</p>
+    </section>
+
+    <!-- 第 2 屏：学得怎么样 -->
+    <section class="rs" data-rs="1">
+      <div class="p-card">
+        <h3>四个模块的练习情况</h3>
+        <div id="bars"></div>
+      </div>
+      <div class="p-card">
+        <h3>需要多看看的</h3>
+        <ul class="weak" id="weakList"></ul>
+      </div>
+      <p class="p-foot">家长端只呈现趋势与方向，不呈现逐题对错明细。</p>
+    </section>
+
+    <!-- 第 3 屏：我可以做什么（含设置区） -->
+    <section class="rs" data-rs="2">
+      <div class="p-card">
+        <h3>今天可以这样做</h3>
+        <ol class="advice" id="adviceList"></ol>
+      </div>
+      <div class="p-card">
+        <h3>设置</h3>
+        <div class="set-row"><span>每日学习时长上限</span>
+          <select id="selLimit" aria-label="每日学习时长上限">
+            <option value="0">不限制</option>
+            <option value="10">10 分钟</option>
+            <option value="15">15 分钟</option>
+            <option value="20">20 分钟</option>
+            <option value="30">30 分钟</option>
+            <option value="45">45 分钟</option>
+            <option value="60">60 分钟</option>
+            <option value="90">90 分钟</option>
+            <option value="120">120 分钟</option>
+            <option value="180">180 分钟</option>
+            <option value="custom">自定义…</option>
+          </select>
+        </div>
+        <!-- 自定义时长：任意 1–600 分钟，随选随存 -->
+        <div class="set-row hidden" id="limitCustom">
+          <span>自定义（分钟）</span>
+          <span class="limit-custom">
+            <input type="number" id="limitCustomInput" min="1" max="600" step="5"
+                   inputmode="numeric" placeholder="如 25" aria-label="自定义分钟数">
+            <button class="p-btn p-btn-sm" id="btnLimitOk">保存</button>
+          </span>
+        </div>
+        <p class="p-note">到时后学习页会温柔提示收尾；选「不限制」则当天不提醒。</p>
+        <div class="set-row"><span>语音引导</span><button class="switch on" id="swVoice" aria-label="语音引导开关"></button></div>
+        <div class="set-row"><span>保留录音（仅本地）</span><button class="switch" id="swRec" aria-label="保留录音开关"></button></div>
+        <div class="set-row"><span>我的教材</span><button class="p-btn" data-href="jiaocai.html">打开</button></div>
+        <div class="set-row"><span>语音设置</span><button class="p-btn" id="btnVoiceSet">打开</button></div>
+        <button class="p-btn danger" id="btnWipe">一键删除本机数据</button>
+      </div>
+      <!-- 录音管理（隐私合规：仅本机、30 天自动清理、逐条可删） -->
+      <div class="p-card">
+        <h3>录音管理</h3>
+        <p class="p-note">录音只保存在本机浏览器，不上传；保留 30 天后自动清理。</p>
+        <div class="set-row"><span>占用空间</span><b id="recUsage">—</b></div>
+        <div id="recList"></div>
+        <button class="p-btn" id="btnRecClear">清空全部录音</button>
+      </div>
+      <p class="p-foot">以上建议来自本周的练习记录。</p>
+    </section>
+
+    <!-- 底部翻屏按钮 -->
+    <div class="rep-nav">
+      <button class="p-btn" id="btnPrev">上一屏</button>
+      <button class="p-btn" id="btnNext">下一屏</button>
+    </div>
+  </main>
+
+<script src="js/data.js"></script>
+<script src="js/common.js"></script>
+<script src="js/tts.js"></script>
+<script src="js/report.js"></script>
+<script src="js/audio-db.js"></script>
+<script src="js/recorder.js"></script>
+<script src="js/voice.js"></script>
+<script src="js/parent.js"></script>
+</body>
+</html>

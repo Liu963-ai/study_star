@@ -1,0 +1,220 @@
+/* ============================================================
+   「汉字小星球」设计变量总控 · base.css
+   ------------------------------------------------------------
+   ① :root 设计变量（色值/圆角/阴影/字号，逐值来自任务书 §3）
+   ② 公共组件样式：状态条 / 底部导航 / 按钮 / 卡片 / 步骤点 / 反馈条 / 图标
+   各页专属样式写在同名 css，色值一律引用这里的变量。
+   ============================================================ */
+
+:root{
+  /* ---------- 色彩（任务书 §3.1，禁止近似色） ---------- */
+  --bg:            #FFF9F0;   /* 主背景 暖白 */
+  --primary:       #FF8A3D;   /* 主色 活力橙 */
+  --c-pinyin:      #4FC3F7;   /* 拼音模块色 */
+  --c-shengzi:     #81C784;   /* 生字模块色 */
+  --c-langdu:      #F06292;   /* 朗读模块色 */
+  --c-jiangli:     #FFD54F;   /* 奖励色 阳光黄 */
+  --text:          #3E2723;   /* 文字主色 深棕 */
+  --text-soft:     #8A6F5C;   /* 次级文字 */
+  --ok:            #66BB6A;   /* 正确反馈 */
+  --retry:         #FFB300;   /* 再试反馈 琥珀 */
+  --card:          #FFFDF8;   /* 卡片白底 */
+  --planet-bg:     #FDF7EE;   /* 吉祥物视频底色（实测） */
+
+  /* 模块主色提亮 15%（模块按钮渐变顶端用） */
+  --c-pinyin-hi:   #7AD3F9;
+  --c-shengzi-hi:  #A5D6A7;
+  --c-langdu-hi:   #F48FB1;
+  --primary-hi:    #FFA961;
+
+  /* 页面内指定的派生色（任务书 §6.5/§6.6 点名使用的颜色） */
+  --path-dot:      #E3D3B8;   /* 地图路径米色圆点 */
+  --shengzi-deep:  #33691E;   /* 生字当前笔画 深绿 */
+  --langdu-read:   #B8A79A;   /* 朗读已读字 */
+  --langdu-hl:     #FFF3D6;   /* 朗读当前字底色 */
+
+  /* ---------- 形状与阴影（任务书 §3.2） ---------- */
+  --radius-card:   20px;
+  --radius-btn:    32px;
+  --radius-module: 24px;
+  --shadow-soft:   0 8px 24px rgba(255,138,61,.18);
+  --shadow-card:   0 6px 20px rgba(0,0,0,.06);
+  --hotzone:       60px;
+
+  /* ---------- 字体族（任务书 §3.3） ---------- */
+  --font-kai:   "KaiTi","STKaiti","楷体",serif;
+  --font-round: "Yuanti SC","幼圆","YouYuan","PingFang SC",sans-serif;
+}
+
+/* ---------- 基础重置 ---------- */
+*{ margin:0; padding:0; box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
+html,body{ height:100%; }
+body{
+  background:var(--bg);
+  color:var(--text);
+  font-family:var(--font-round);
+  overflow-x:hidden;
+  touch-action:manipulation;             /* 禁双击缩放 */
+  user-select:none; -webkit-user-select:none;  /* 禁长按选中 */
+}
+/* 平板横屏 1024×768 基准：内容居中，宽窗不拉伸 */
+.page{ max-width:1024px; margin:0 auto; position:relative; }
+
+button{ font-family:inherit; border:none; background:none; cursor:pointer; color:inherit; }
+img,video,svg{ display:block; }
+.hidden{ display:none !important; }
+
+/* ---------- 按下态：缩放 95% + 阴影收紧（150ms ease-out） ---------- */
+.pressable{ transition:transform .15s ease-out, box-shadow .15s ease-out; }
+.pressable:active{ transform:scale(.95); box-shadow:0 3px 10px rgba(0,0,0,.08); }
+
+/* ---------- 顶部状态条（高度 <15%） ---------- */
+.topbar{
+  height:76px; padding:8px 24px;
+  display:flex; align-items:center; gap:16px;
+  background:rgba(255,249,240,.92);
+  border-bottom:1px solid rgba(62,39,35,.08);
+  position:relative; z-index:5;
+}
+.topbar-space{ flex:1; }
+/* 星星罐胶囊：阳光黄底 + ⭐ + 数字 */
+.star-pill{
+  height:56px; padding:0 22px; border-radius:999px;
+  background:var(--c-jiangli); color:#6B4A00;
+  font-size:24px; font-weight:bold;
+  display:inline-flex; align-items:center; gap:10px;
+  box-shadow:var(--shadow-soft);
+}
+/* 圆形图标按钮（音量等） */
+.icon-btn{
+  width:var(--hotzone); height:var(--hotzone); border-radius:50%;
+  background:#fff; box-shadow:var(--shadow-soft);
+  display:flex; align-items:center; justify-content:center;
+}
+/* 返回按钮：圆形白底 + 左箭头 SVG */
+.back-btn{
+  width:var(--hotzone); height:var(--hotzone); border-radius:50%;
+  background:#fff; box-shadow:var(--shadow-soft);
+  display:flex; align-items:center; justify-content:center;
+}
+/* 状态条笑脸头像（非首页页面的头像位） */
+.avatar-smile{
+  width:60px; height:60px; border-radius:50%;
+  background:#fff; box-shadow:var(--shadow-soft);
+  display:flex; align-items:center; justify-content:center;
+  color:var(--c-jiangli);
+}
+.avatar-smile .ico{ width:38px; height:38px; }
+
+/* ---------- 底部导航：100px，5 个 SVG 线性图标，无文字 ---------- */
+.navbar{
+  position:fixed; left:0; right:0; bottom:0;
+  height:100px; max-width:1024px; margin:0 auto;
+  background:rgba(255,249,240,.95);
+  border-top:1px solid rgba(62,39,35,.08);
+  box-shadow:0 -6px 20px rgba(0,0,0,.04);
+  display:flex; align-items:center; justify-content:space-around;
+  padding:0 6vw; z-index:10;
+}
+.nav-btn{
+  width:76px; height:76px; border-radius:50%;
+  display:flex; flex-direction:column; align-items:center; justify-content:center; gap:2px;
+  color:var(--text-soft);
+  transition:transform .15s ease-out, color .15s ease-out;
+  position:relative;
+}
+.nav-btn .ico{ width:34px; height:34px; }
+/* 图标下方的中文文字标签（一年级不识字也能看懂） */
+.nav-btn .nav-txt{
+  font-size:20px; font-weight:bold; line-height:1; color:inherit;
+  letter-spacing:1px;
+}
+/* 当前项：图标取模块色（由页面以 --nav-on 指定）+ 下方 4px 小圆点 */
+.nav-btn.is-current{ color:var(--nav-on, var(--primary)); transform:scale(1.06); }
+.nav-btn.is-current::after{
+  content:""; position:absolute; bottom:4px; left:50%; transform:translateX(-50%);
+  width:4px; height:4px; border-radius:50%; background:currentColor;
+}
+/* 锁图标：明显更小（约 78%），中性色 */
+.nav-btn.nav-lock .ico{ width:36px; height:36px; }
+.nav-btn.nav-lock{ color:var(--text-soft); }
+
+/* ---------- 图标占位（common.js 注入内联 SVG） ---------- */
+.ico{ display:inline-flex; }
+.ico svg{ width:100%; height:100%; }
+
+/* ---------- 学习页顶栏：返回 + 步骤点 + 右侧控件 ---------- */
+.learn-bar{
+  height:76px; padding:8px 24px;
+  display:flex; align-items:center; gap:18px;
+}
+.learn-bar .bar-space{ flex:1; }
+
+/* 步骤指示器：5 个小圆点，点亮色随模块 */
+.step-dots{ display:flex; gap:14px; }
+.step-dots .sdot{
+  width:16px; height:16px; border-radius:50%;
+  background:rgba(62,39,35,.14);
+  transition:transform .2s ease-out, background .2s ease-out;
+}
+.step-dots .sdot.on{ background:var(--mc,var(--primary)); transform:scale(1.2); }
+
+/* ---------- 通用按钮 ---------- */
+.btn-main{
+  min-height:80px; min-width:var(--hotzone);
+  padding:0 36px; border-radius:var(--radius-btn);
+  background:var(--mc,var(--primary)); color:#fff;
+  font-size:26px; font-weight:bold;
+  display:inline-flex; align-items:center; justify-content:center; gap:14px;
+  box-shadow:var(--shadow-soft);
+}
+.btn-main .ico{ width:32px; height:32px; }
+.btn-sub{
+  min-height:72px; min-width:var(--hotzone);
+  padding:0 28px; border-radius:var(--radius-btn);
+  background:#fff; color:var(--mc,var(--primary));
+  border:2px solid var(--mc,var(--primary));
+  font-size:24px; font-weight:bold; white-space:nowrap;
+  display:inline-flex; align-items:center; gap:12px;
+  box-shadow:var(--shadow-card);
+}
+.btn-sub .ico{ width:28px; height:28px; }
+
+/* ---------- 通用卡片 ---------- */
+.card{
+  background:var(--card);
+  border-radius:var(--radius-card);
+  box-shadow:var(--shadow-card);
+}
+
+/* ---------- 反馈提示条（琥珀 + 🔶，绝不报错） ---------- */
+.toast{
+  position:fixed; left:50%; bottom:130px; transform:translateX(-50%);
+  background:#FFF3DC; color:#7A5200;
+  border:2px solid var(--retry); border-radius:999px;
+  padding:14px 28px; font-size:24px; font-weight:bold;
+  box-shadow:var(--shadow-soft);
+  display:flex; align-items:center; gap:10px;
+  z-index:60; animation:toastIn .25s ease-out;
+}
+@keyframes toastIn{ from{ transform:translate(-50%,16px); opacity:0; } }
+
+/* ---------- 温和左右摆动（再试一次，≤6° 两次） ---------- */
+@keyframes wobble{ 0%,100%{transform:translateX(0) rotate(0);} 25%{transform:translateX(-8px) rotate(-2deg);} 75%{transform:translateX(8px) rotate(2deg);} }
+.wobble{ animation:wobble .4s ease-out 2; }
+
+/* ---------- 数字跳动 ---------- */
+@keyframes bump{ 0%{transform:scale(1);} 40%{transform:scale(1.3);} 100%{transform:scale(1);} }
+.bump{ display:inline-block; animation:bump .5s ease-out; }
+
+/* ---------- 无障碍：减少动态时全部退化为即时状态 ---------- */
+@media (prefers-reduced-motion: reduce){
+  *{ animation-duration:.01ms !important; animation-iteration-count:1 !important; transition-duration:.01ms !important; }
+}
+
+/* ---------- 手机窄屏：字号不缩，减元素/收边距 ---------- */
+@media (max-width:700px){
+  .btn-main{ font-size:22px; padding:0 24px; }
+  .btn-sub{ font-size:20px; padding:0 18px; }
+  .star-pill{ font-size:20px; padding:0 16px; }
+}

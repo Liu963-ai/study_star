@@ -1,0 +1,148 @@
+/* ============================================================
+   生字森林·写一写 · shengzi.css（任务书 §6.5）
+   页面主色 --c-shengzi；田字格三层字形；无额外运动元素
+   （笔顺动画由控件驱动，播完停留静止确认帧）。
+   ============================================================ */
+
+.sz-main{
+  display:flex; gap:30px;
+  padding:10px 26px 120px;
+  justify-content:center; align-items:flex-start;
+  min-height:calc(100vh - 76px - 76px - 30px);
+}
+
+/* ---- 左列：田字格 ---- */
+.sz-left{ flex:0 0 460px; display:flex; flex-direction:column; align-items:center; gap:24px; }
+.tian{
+  position:relative; width:440px; height:440px;
+  border:4px solid var(--c-shengzi);
+  overflow:hidden;
+}
+.tian-grid{ position:absolute; inset:0; width:100%; height:100%; }
+.tian-grid path{
+  fill:none; stroke:var(--c-shengzi); opacity:.4;
+  stroke-width:1.2; stroke-linecap:round;
+}
+/* 中层：半透明描红字 */
+.tian-char{
+  position:absolute; inset:0;
+  display:flex; align-items:center; justify-content:center;
+  font-family:var(--font-kai);
+  font-size:120px; color:var(--c-shengzi); opacity:.35;
+}
+/* 笔顺层：描红轮廓 + 当前笔画 */
+.tian-strokes{ position:absolute; inset:0; width:100%; height:100%; }
+.tian-strokes .trace{
+  fill:none; stroke:var(--c-shengzi); opacity:.28;
+  stroke-width:10; stroke-linecap:round;
+}
+.tian-strokes .top{
+  fill:none; stroke:var(--shengzi-deep);
+  stroke-width:7; stroke-linecap:round;
+  opacity:0;
+}
+/* 教材字：Hanzi Writer 容器 */
+.hw{
+  position:absolute; inset:0;
+  display:flex; align-items:center; justify-content:center;
+}
+.hw svg{ width:88%; height:88%; }
+
+/* 三个胶囊控件 */
+.sz-controls{ display:flex; gap:16px; }
+
+/* ---- 右列 ---- */
+.sz-right{ flex:0 0 300px; display:flex; flex-direction:column; gap:18px; padding-top:6px; }
+/* 播报条 */
+.sz-say{
+  padding:16px 20px; border:3px solid var(--c-shengzi);
+  display:flex; align-items:center; gap:12px;
+  font-size:22px; font-weight:bold; color:var(--text);
+}
+.sz-say .ico{ width:28px; height:28px; color:var(--c-shengzi); flex:none; }
+/* 本字信息卡：大字 + 拼音 + 组词（词语可点击朗读） */
+.sz-charinfo{
+  border:3px solid var(--c-shengzi);
+  padding:14px 18px;
+  display:flex; align-items:center; gap:16px;
+}
+.sz-big{
+  font-family:var(--font-kai);
+  font-size:56px; line-height:1.1; color:var(--text);
+  flex:none;
+}
+.sz-charinfo-right{ display:flex; flex-direction:column; gap:6px; min-width:0; }
+.sz-py{ font-size:20px; font-weight:bold; color:var(--shengzi-deep); }
+.sz-words{ display:flex; flex-wrap:wrap; gap:8px; }
+.sz-word{
+  padding:4px 12px; border-radius:999px;
+  background:rgba(129,199,132,.22);
+  font-size:18px; color:var(--text); font-weight:bold;
+}
+.sz-word:hover{ background:rgba(129,199,132,.4); }
+/* 进度卡：浅绿底圆角卡 */
+.sz-progress{
+  background:rgba(129,199,132,.18); border-radius:16px;
+  padding:16px 20px;
+}
+.sz-progress-text{ font-size:20px; color:var(--text); margin-bottom:10px; }
+.sz-progress-text b{ color:var(--shengzi-deep); font-size:24px; }
+.sz-progress-dots{ display:flex; gap:10px; }
+.sz-progress-dots .pdot{
+  width:16px; height:16px; border-radius:50%;
+  background:#fff; border:2px solid var(--c-shengzi);
+}
+.sz-progress-dots .pdot.full{ background:var(--c-shengzi); }
+/* 字卡册卡 */
+.sz-zicard{
+  border:3px solid var(--c-shengzi);
+  padding:14px 18px;
+  display:flex; align-items:center; gap:16px; text-align:left;
+}
+.zicard-mini{
+  width:64px; height:64px; flex:none;
+  border:2px solid var(--c-shengzi); border-radius:8px;
+  position:relative;
+  display:flex; align-items:center; justify-content:center;
+  background:
+    linear-gradient(transparent 49%, rgba(129,199,132,.5) 49%, rgba(129,199,132,.5) 51%, transparent 51%),
+    linear-gradient(90deg, transparent 49%, rgba(129,199,132,.5) 49%, rgba(129,199,132,.5) 51%, transparent 51%);
+}
+.zicard-mini span{
+  font-family:var(--font-kai); font-size:38px; color:var(--text);
+}
+.zicard-text{ display:flex; flex-direction:column; gap:2px; }
+.zicard-text b{ font-size:24px; color:var(--text); }
+.zicard-text i{ font-style:normal; font-size:18px; color:var(--text-soft); }
+.zicard-text em{ font-style:normal; color:var(--shengzi-deep); font-weight:bold; }
+/* 提示条 */
+.sz-hint{
+  background:rgba(129,199,132,.18); border-radius:16px;
+  padding:14px 20px; font-size:20px; color:var(--text);
+  display:flex; align-items:center; gap:10px;
+}
+.sz-hint .ico{ width:26px; height:26px; color:var(--shengzi-deep); flex:none; }
+
+/* ---- 窄屏：上下排 ---- */
+@media (max-width:900px){
+  .sz-main{ flex-direction:column; align-items:center; }
+  .sz-left{ flex:none; width:100%; max-width:440px; }
+  .tian{ width:min(440px, 88vw); height:min(440px, 88vw); }
+  .sz-right{ flex:none; width:100%; max-width:440px; }
+}
+
+/* ---- 矮屏适配：缩小田字格与间距，保证控件不与底部导航重叠 ---- */
+@media (max-height:860px){
+  .sz-main{ gap:20px; padding-top:6px; }
+  .sz-left{ gap:14px; }
+  .tian{ width:340px; height:340px; }
+  .tian-char{ font-size:96px; }
+  .sz-right{ gap:12px; }
+  .sz-controls{ gap:10px; }
+}
+@media (max-height:760px){
+  .tian{ width:300px; height:300px; }
+  .tian-char{ font-size:84px; }
+  .sz-charinfo{ padding:10px 14px; }
+  .sz-big{ font-size:44px; }
+}

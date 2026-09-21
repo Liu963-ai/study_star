@@ -1,0 +1,75 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="manifest" href="manifest.json">
+<meta name="theme-color" content="#FF8A3D">
+<title>汉字小星球 · 闯关地图</title>
+<link rel="stylesheet" href="css/base.css">
+<link rel="stylesheet" href="css/ditu.css">
+</head>
+<body class="page">
+
+  <!-- ===== 顶部状态条 ===== -->
+  <header class="topbar">
+    <button class="back-btn pressable" data-say="回首页"><span class="ico" data-ico="back"></span></button>
+    <button class="star-pill pressable">⭐ <b data-star-count>0</b></button>
+    <span class="topbar-space"></span>
+    <button class="icon-btn btn-volume pressable" aria-label="音量开关"></button>
+  </header>
+
+  <!-- ===== 地图：太阳 / 白云 / 丘陵（静态）+ 圆点虚线路径 + 10 个关卡节点 + 小火车 ===== -->
+  <main class="map-stage" id="mapStage">
+    <div class="sun" aria-hidden="true"></div>
+    <div class="cloud cloud-a" aria-hidden="true"></div>
+    <div class="cloud cloud-b" aria-hidden="true"></div>
+    <div class="hill hill-a" aria-hidden="true"></div>
+    <div class="hill hill-b" aria-hidden="true"></div>
+
+    <svg class="map-path" viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true">
+      <path d="M14,72 C22,50 26,42 34,42 C44,42 42,62 52,60 C62,58 60,32 70,34 C80,36 78,58 88,58"
+            vector-effect="non-scaling-stroke"/>
+    </svg>
+
+    <!-- 关卡节点 + 小火车由 js/ditu.js 生成 -->
+    <div class="train" id="train" aria-hidden="true">🚂</div>
+  </main>
+
+  <!-- ===== 答题任务卡（点击当前关卡弹出） ===== -->
+  <div class="quest hidden" id="quest">
+    <div class="quest-card card">
+      <p class="quest-level" id="questLevel">第 1 关</p>
+      <div class="quest-ask" id="questAsk"></div>
+      <div class="quest-opts" id="questOpts"></div>
+      <div class="quest-foot">
+        <button class="p-btn pressable" id="questListen"><span class="ico" data-ico="speaker"></span>听一听</button>
+        <button class="p-btn pressable" id="questClose">先不答</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ===== 通关庆祝（10 关全部完成） ===== -->
+  <div class="quest hidden" id="party">
+    <div class="quest-card card">
+      <div class="party-emoji" aria-hidden="true">🎉🚂💨</div>
+      <p class="party-title">小火车到站啦！</p>
+      <p class="party-sub">10 关全部通过，你真棒！</p>
+      <button class="btn-main pressable" id="btnPartyOk" style="--mc:var(--primary)"><span>⭐</span><span>领取星星</span></button>
+    </div>
+  </div>
+
+  <footer class="navbar">
+    <button class="nav-btn pressable" data-href="home.html" data-say="回首页"><span class="ico" data-ico="home"></span></button>
+    <button class="nav-btn pressable is-current" style="--nav-on:var(--primary)" data-say="已经在地图啦"><span class="ico" data-ico="map"></span></button>
+    <button class="nav-btn pressable" data-href="langdu.html" data-say="朗读剧场开演"><span class="ico" data-ico="mic"></span></button>
+    <button class="nav-btn pressable" data-href="jiangli.html" data-say="星星罐"><span class="ico" data-ico="jar"></span></button>
+    <button class="nav-btn nav-lock pressable" data-href="parent.html"><span class="ico" data-ico="lock"></span></button>
+  </footer>
+
+<script src="js/data.js"></script>
+<script src="js/common.js"></script>
+<script src="js/tts.js"></script>
+<script src="js/ditu.js"></script>
+</body>
+</html>

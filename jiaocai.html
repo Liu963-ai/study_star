@@ -1,0 +1,90 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="manifest" href="manifest.json">
+<meta name="theme-color" content="#FF8A3D">
+<title>汉字小星球 · 我的教材</title>
+<link rel="stylesheet" href="css/base.css">
+<link rel="stylesheet" href="css/parent.css">
+<link rel="stylesheet" href="css/jiaocai.css">
+</head>
+<body class="page parent-page">
+
+  <header class="rep-top">
+    <button class="back-btn pressable" aria-label="返回"><span class="ico" data-ico="back"></span></button>
+    <h2 class="rep-title">我的教材</h2>
+  </header>
+
+  <main class="jc">
+
+    <!-- 卡 1：AI 设置（智谱） -->
+    <div class="p-card">
+      <h3>AI 设置（智谱大模型）</h3>
+      <div class="set-row"><span>API Key</span>
+        <input type="password" id="llmKey" placeholder="粘贴智谱 API Key" autocomplete="off">
+      </div>
+      <div class="set-row"><span>模型</span>
+        <select id="llmModel">
+          <option value="glm-4-flash" selected>glm-4-flash（免费）</option>
+          <option value="glm-4-air">glm-4-air</option>
+          <option value="glm-4-plus">glm-4-plus</option>
+        </select>
+      </div>
+      <button class="p-btn" id="btnLlmTest">测试连接</button>
+      <span class="jc-status" id="llmStatus">未测试</span>
+      <p class="p-foot">Key 只保存在本机浏览器（localStorage），导入时课文文本会发送给智谱接口。</p>
+    </div>
+
+    <!-- 卡 2：导入教材 -->
+    <div class="p-card">
+      <h3>导入教材</h3>
+      <div class="jc-import">
+        <label class="p-btn" for="pdfFile">📄 选择 PDF（文字版）</label>
+        <input type="file" id="pdfFile" accept="application/pdf" hidden>
+        <span class="jc-status" id="pdfStatus">未选择</span>
+      </div>
+      <textarea class="jc-text" id="jcText" rows="8"
+                placeholder="也可以直接把课文粘贴到这里（支持上一步 PDF 自动提取的文本）"></textarea>
+      <div class="jc-row">
+        <button class="p-btn p-btn-primary" id="btnAI">✨ AI 整理成题目</button>
+        <button class="p-btn" id="btnManual">手动整理（不用 AI）</button>
+      </div>
+      <!-- 手动模式的三类词语输入（AI 不可用时的降级路径） -->
+      <div class="jc-manual hidden" id="manualBox">
+        <p class="jc-hint">按类型填词语（逗号分隔），生字与句子会自动从课文提取。</p>
+        <input class="jc-in" id="mWho" placeholder="谁的词，如：小猫,小鸟">
+        <input class="jc-in" id="mWhere" placeholder="在哪里的词，如：在树上,在屋里">
+        <input class="jc-in" id="mWhat" placeholder="做什么的词，如：唱歌,飞翔">
+      </div>
+      <span class="jc-status" id="genStatus"></span>
+    </div>
+
+    <!-- 卡 3：整理结果预览（确认后才入库） -->
+    <div class="p-card hidden" id="previewCard">
+      <h3>整理结果预览</h3>
+      <div class="set-row"><span>单元名称</span><input class="jc-in" id="bookName"></div>
+      <p class="jc-hint">生字（拼音已用本地拼音库校正，可点击修改）</p>
+      <div class="char-preview" id="charPreview"></div>
+      <p class="jc-hint" id="statLine"></p>
+      <button class="p-btn p-btn-primary" id="btnSave">✅ 确认无误，存入教材</button>
+    </div>
+
+    <!-- 卡 4：已存教材包管理 -->
+    <div class="p-card">
+      <h3>已存教材</h3>
+      <div id="bookList"></div>
+      <p class="p-foot">启用后，学生端四个学习站的题目将改从这本教材出题；停用即恢复内置内容。</p>
+    </div>
+  </main>
+
+<script src="js/data.js"></script>
+<script src="js/common.js"></script>
+<script src="js/tts.js"></script>
+<script src="js/planner.js"></script>
+<script src="assets/lib/pdf.min.js"></script>
+<script src="assets/lib/pinyin-pro.min.js"></script>
+<script src="js/jiaocai.js"></script>
+</body>
+</html>

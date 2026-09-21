@@ -1,0 +1,194 @@
+/* ============================================================
+   拼音星球·读一读 · pinyin.css（任务书 §6.4）
+   页面主色 --c-pinyin：按钮/边框/进度点/声波全部用蓝；
+   录音主按钮除外（实心绿）。
+   ============================================================ */
+
+.py-main{
+  display:flex; gap:28px;
+  padding:10px 26px 120px;
+  align-items:flex-start; justify-content:center;
+  min-height:calc(100vh - 76px - 76px - 30px);
+}
+
+/* ---- 左列 ---- */
+.py-left{ flex:0 0 460px; display:flex; flex-direction:column; align-items:center; gap:22px; }
+
+/* 分组切换小胶囊（声母/韵母/整体认读） */
+.py-groups{ display:flex; gap:10px; }
+.py-groups .py-g{
+  min-height:60px; padding:0 18px; border-radius:999px;
+  background:#fff; color:var(--c-pinyin);
+  border:2px solid var(--c-pinyin);
+  font-size:20px; font-weight:bold;
+  opacity:.55;
+}
+.py-groups .py-g.on{ background:var(--c-pinyin); color:#fff; opacity:1; }
+
+/* 大字母卡：白底 + 4px 蓝描边 + 圆角 20（纵向排列：四线格 + 呼读音提示） */
+.letter-card{
+  width:100%; padding:20px 26px 14px;
+  border:4px solid var(--c-pinyin);
+  display:flex; flex-direction:column; align-items:center; gap:6px;
+}
+/* 四线格：4 条浅蓝虚线，构成 3 格；字母主体压在第 2、3 线之间 */
+.grid4{ position:relative; width:360px; height:186px; }
+.grid4 .gl{ position:absolute; left:0; right:0; height:0; border-top:3px dashed rgba(79,195,247,.45); }
+.grid4 .l1{ top:0; } .grid4 .l2{ top:33.33%; } .grid4 .l3{ top:66.66%; } .grid4 .l4{ top:100%; }
+/* 字母：基线坐在第 3 线上（下数 1/3 处），楷体 76px */
+.py-letter{
+  position:absolute; left:0; right:0; bottom:33%;
+  text-align:center; line-height:0;
+  font-family:var(--font-kai);
+  font-size:76px; color:var(--text);
+}
+
+/* 声波柱状图：9 根圆头竖条（蓝色） */
+.wave{ display:flex; align-items:center; gap:10px; height:64px; }
+.wave span{
+  width:12px; height:14px; border-radius:999px;
+  background:var(--c-pinyin); opacity:.85;
+  transition:height .12s ease-out;
+}
+/* 播放中：随声音起伏（与 TTS 播放状态绑定，非装饰性乱动） */
+.wave.playing span{ animation:waveA .5s ease-in-out infinite alternate; }
+.wave.playing span:nth-child(2n){ animation-duration:.38s; }
+.wave.playing span:nth-child(3n){ animation-duration:.6s; }
+.wave.playing span:nth-child(1){ height:30px; }
+.wave.playing span:nth-child(2){ height:52px; }
+.wave.playing span:nth-child(3){ height:40px; }
+.wave.playing span:nth-child(4){ height:58px; }
+.wave.playing span:nth-child(5){ height:34px; }
+.wave.playing span:nth-child(6){ height:56px; }
+.wave.playing span:nth-child(7){ height:42px; }
+.wave.playing span:nth-child(8){ height:26px; }
+.wave.playing span:nth-child(9){ height:48px; }
+@keyframes waveA{ from{ transform:scaleY(.55); } to{ transform:scaleY(1.15); } }
+
+/* ---- 录音按钮行 ---- */
+.rec-row{ display:flex; align-items:center; gap:20px; }
+/* 发音主按钮：实心绿色圆形 88×88（录音控件唯一豁免蓝色） */
+.rec-main{
+  position:relative; width:88px; height:88px; border-radius:50%;
+  background:var(--ok);
+  display:flex; align-items:center; justify-content:center;
+  box-shadow:var(--shadow-soft);
+}
+.rec-ico{ width:40px; height:40px; color:#fff; }
+/* 长按：闪烁 + 外圈倒计时环（SVG 圆环 3s 走完一圈） */
+.rec-ring{
+  position:absolute; inset:-9px; width:106px; height:106px;
+  transform:rotate(-90deg); opacity:0; pointer-events:none;
+}
+.rec-ring circle{
+  fill:none; stroke:var(--ok); stroke-width:5;
+  stroke-dasharray:289; stroke-dashoffset:289; stroke-linecap:round;
+}
+.rec-main.rec .rec-ring{ opacity:1; }
+.rec-main.rec .rec-ring circle{ animation:ringCount 3s linear forwards; }
+@keyframes ringCount{ to{ stroke-dashoffset:0; } }
+.rec-main.rec .rec-ico{ animation:recBlink .5s ease-in-out infinite; }
+@keyframes recBlink{ 0%,100%{ opacity:1; } 50%{ opacity:.35; } }
+
+/* 识别态：3 个跳动小圆点（1200ms） */
+.recognizing{ display:flex; gap:12px; height:20px; }
+.recognizing.hidden{ display:none; }
+.recognizing span{
+  width:14px; height:14px; border-radius:50%;
+  background:var(--c-pinyin);
+  animation:dotJump .9s ease-in-out infinite;
+}
+.recognizing span:nth-child(2){ animation-delay:.15s; }
+.recognizing span:nth-child(3){ animation-delay:.3s; }
+@keyframes dotJump{ 0%,100%{ transform:translateY(4px); } 50%{ transform:translateY(-4px); } }
+
+/* ---- 右列：组字卡（拼音可组成的汉字+词语） ---- */
+.py-right{ flex:0 0 320px; display:flex; flex-direction:column; gap:20px; padding-top:6px; }
+/* 呼读音提示（字母卡下方） */
+.letter-read{
+  text-align:center; margin-top:2px;
+  font-size:20px; color:var(--c-pinyin); font-weight:bold;
+  letter-spacing:1px;
+}
+/* ---- 四声练习行：连读开关 + 四个带调音节按钮 ---- */
+.tone-row{ display:flex; gap:12px; justify-content:center; align-items:stretch; }
+.tone-btn{
+  min-width:78px; padding:8px 10px 10px;
+  border-radius:16px; background:#fff;
+  border:3px solid var(--c-pinyin);
+  display:flex; flex-direction:column; align-items:center; gap:2px;
+}
+.tone-btn:active{ transform:scale(.95); }
+/* 连读开关：开启后点某声，从第一声连读到该声 */
+.tone-liandu{
+  min-width:88px; padding:8px 10px 10px;
+  border-radius:16px; background:#fff;
+  border:3px dashed var(--c-pinyin);
+  color:var(--c-pinyin);
+  display:flex; flex-direction:column; align-items:center; gap:2px;
+}
+.tone-liandu:active{ transform:scale(.95); }
+.tone-liandu.on{
+  background:var(--c-pinyin); border-style:solid; color:#fff;
+}
+.tone-liandu.on .tone-syl{ color:#fff; }
+.tone-mark{
+  font-size:18px; line-height:1; color:var(--c-pinyin);
+  font-weight:bold;
+}
+.tone-liandu .tone-mark{ color:inherit; }
+.tone-syl{
+  font-family:var(--font-kai);
+  font-size:30px; line-height:1.15; color:var(--text);
+}
+.tone-liandu .tone-syl{ font-size:26px; }
+.zi-card{ padding:20px 18px 12px; border:3px solid var(--c-pinyin); }
+.zi-title{
+  font-size:24px; font-weight:bold; color:var(--c-pinyin);
+  margin-bottom:10px; letter-spacing:2px;
+}
+.zi-rows{ display:flex; flex-direction:column; }
+/* 每行：左＝字（拼音+大字），右＝词（词+词的拼音），两块都可点读 */
+.zi-row{ display:flex; align-items:center; gap:16px; }
+.zi-row + .zi-row{ border-top:2px dashed rgba(79,195,247,.35); }
+.zi-zi{
+  flex:0 0 96px; display:flex; flex-direction:column; align-items:center;
+  padding:8px 0 6px; border-radius:14px; background:transparent;
+}
+.zi-zi:hover{ background:rgba(79,195,247,.12); }
+.zi-py{ font-size:16px; color:var(--c-pinyin); font-weight:bold; line-height:1.1; }
+.zi-char{
+  font-family:var(--font-kai);
+  font-size:46px; color:var(--text); line-height:1.15;
+}
+.zi-word{
+  flex:1; display:flex; flex-direction:column; align-items:flex-start; gap:2px;
+  padding:8px 12px; border-radius:14px; background:transparent; text-align:left;
+}
+.zi-word:hover{ background:rgba(79,195,247,.12); }
+.zi-w{ font-size:22px; font-weight:bold; color:var(--text); }
+.zi-wpy{ font-size:15px; color:var(--c-pinyin); }
+/* 浅蓝底提示气泡 */
+.py-hint{
+  background:rgba(79,195,247,.16); border-radius:16px;
+  padding:16px 20px; font-size:20px; color:var(--text);
+  display:flex; align-items:center; gap:10px;
+}
+.py-hint .ico{ width:26px; height:26px; color:var(--c-pinyin); flex:none; }
+
+/* 再听一遍胶囊：浅蓝底蓝字全圆角 */
+.pill-replay{
+  min-height:60px; padding:0 22px; border-radius:999px;
+  background:rgba(79,195,247,.16); color:var(--c-pinyin);
+  font-size:22px; font-weight:bold;
+  display:inline-flex; align-items:center; gap:10px;
+}
+.pill-replay .ico{ width:26px; height:26px; }
+
+/* ---- 窄屏：改单列，字母卡优先 ---- */
+@media (max-width:900px){
+  .py-main{ flex-direction:column; align-items:center; }
+  .py-left{ flex:none; width:100%; max-width:460px; }
+  .py-right{ flex:none; width:100%; max-width:460px; }
+  .grid4{ width:100%; }
+}

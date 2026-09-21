@@ -1,0 +1,109 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="manifest" href="manifest.json">
+<meta name="theme-color" content="#FF8A3D">
+<title>汉字小星球 · 拼音星球</title>
+<link rel="stylesheet" href="css/base.css">
+<link rel="stylesheet" href="css/pinyin.css">
+</head>
+<body class="page" style="--mc:var(--c-pinyin)">
+
+  <!-- 顶栏：返回 + 步骤点（第 2 点亮）+ 再听一遍 -->
+  <header class="learn-bar">
+    <button class="back-btn pressable" data-say="回首页"><span class="ico" data-ico="back"></span></button>
+    <div class="step-dots" aria-hidden="true">
+      <span class="sdot"></span><span class="sdot on"></span><span class="sdot"></span><span class="sdot"></span><span class="sdot"></span>
+    </div>
+    <span class="bar-space"></span>
+    <button class="pill-replay pressable" id="btnReplay">
+      <span class="ico" data-ico="speaker"></span><span>再听一遍</span>
+    </button>
+  </header>
+
+  <!-- ===== 顶部状态条（§6.0 全局框架，头像位＝笑脸图标）===== -->
+  <header class="topbar">
+    <span class="avatar-smile ico" data-ico="smile" aria-hidden="true"></span>
+    <button class="star-pill pressable">⭐ <b data-star-count>0</b></button>
+    <span class="topbar-space"></span>
+    <button class="icon-btn btn-volume pressable" aria-label="音量开关"></button>
+  </header>
+
+  <main class="py-main">
+    <!-- 左列：分组切换 + 大字母卡（四线格）+ 声波柱状图 + 录音按钮行 -->
+    <section class="py-left">
+      <!-- 分组胶囊：声母 / 韵母 / 整体认读（拼音全表） -->
+      <div class="py-groups" id="pyGroups"></div>
+      <div class="letter-card card">
+        <div class="grid4">
+          <i class="gl l1"></i><i class="gl l2"></i><i class="gl l3"></i><i class="gl l4"></i>
+          <span class="py-letter" id="bigLetter">b</span>
+        </div>
+        <!-- 呼读音提示：告诉孩子这个拼音读作什么 -->
+        <p class="letter-read" id="letterRead">读作「玻」</p>
+      </div>
+
+      <!-- 四声练习：四个带调音节，点击朗读（声母与 a 相拼，韵母/整体认读直接标调） -->
+      <div class="tone-row" id="toneRow" aria-label="四声练习"></div>
+
+      <!-- 声波柱状图：9 根圆头竖条，与发音同步起伏 -->
+      <div class="wave" id="wave" aria-hidden="true">
+        <span></span><span></span><span></span><span></span><span></span>
+        <span></span><span></span><span></span><span></span>
+      </div>
+
+      <div class="rec-row">
+        <!-- 发音主按钮：实心绿色圆形，长按说话 -->
+        <button class="rec-main pressable" id="btnRec" aria-label="长按说话">
+          <svg class="rec-ring" viewBox="0 0 100 100" aria-hidden="true">
+            <circle cx="50" cy="50" r="46"/>
+          </svg>
+          <span class="ico rec-ico" data-ico="mic"></span>
+        </button>
+        <!-- 次按钮：长按跟我读 -->
+        <button class="btn-sub pressable" id="btnFollow">
+          <span class="ico" data-ico="mic"></span><span>长按跟我读</span>
+        </button>
+      </div>
+
+      <!-- 识别态：3 个跳动小圆点 -->
+      <div class="recognizing hidden" id="recognizing" aria-hidden="true">
+        <span></span><span></span><span></span>
+      </div>
+    </section>
+
+    <!-- 右列：组字卡（该拼音可组成的汉字+词语，均可点击朗读）+ 提示气泡 -->
+    <aside class="py-right">
+      <div class="zi-card card">
+        <p class="zi-title" id="ziTitle">「b」可以组成</p>
+        <div class="zi-rows" id="ziRows"></div>
+      </div>
+      <div class="py-hint">
+        <span class="ico" data-ico="mic"></span><span>先听清楚，再跟着读一遍。</span>
+      </div>
+    </aside>
+  </main>
+
+  <!-- ===== 底部导航：5 个 SVG 线性图标，无文字 ===== -->
+  <footer class="navbar">
+    <button class="nav-btn pressable" data-href="home.html" data-say="回首页"><span class="ico" data-ico="home"></span></button>
+    <button class="nav-btn pressable" data-href="ditu.html" data-say="闯关地图"><span class="ico" data-ico="map"></span></button>
+    <button class="nav-btn pressable is-current" data-say="继续探险"><span class="ico" data-ico="mic"></span></button>
+    <button class="nav-btn pressable" data-href="jiangli.html" data-say="星星罐"><span class="ico" data-ico="jar"></span></button>
+    <button class="nav-btn nav-lock pressable" data-href="parent.html"><span class="ico" data-ico="lock"></span></button>
+  </footer>
+
+
+<script src="js/data.js"></script>
+<script src="js/common.js"></script>
+<script src="js/report.js"></script>
+<script src="js/tts.js"></script>
+<script src="js/audio-db.js"></script>
+<script src="js/recorder.js"></script>
+<script src="js/planner.js"></script>
+<script src="assets/lib/pinyin-pro.min.js"></script>
+<script src="js/pinyin.js"></script>
+</body>
+</html>

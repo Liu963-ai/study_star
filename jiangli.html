@@ -1,0 +1,73 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="manifest" href="manifest.json">
+<meta name="theme-color" content="#FF8A3D">
+<title>汉字小星球 · 奖励中心</title>
+<link rel="stylesheet" href="css/base.css">
+<link rel="stylesheet" href="css/tree-motion.css">
+<link rel="stylesheet" href="css/jiangli.css">
+</head>
+<body class="page">
+
+  <header class="topbar">
+    <button class="back-btn pressable" data-say="回首页"><span class="ico" data-ico="back"></span></button>
+    <button class="star-pill pressable">⭐ <b data-star-count>0</b></button>
+    <span class="topbar-space"></span>
+    <button class="icon-btn btn-volume pressable" aria-label="音量开关"></button>
+  </header>
+
+  <!-- 四个页签：当前＝橙色实底白字 -->
+  <nav class="tabbar" id="tabbar">
+    <button class="tab pressable on" data-tab="stars">星星</button>
+    <button class="tab pressable" data-tab="badges">徽章</button>
+    <button class="tab pressable" data-tab="tree">成长树</button>
+    <button class="tab pressable" data-tab="shop">商店</button>
+  </nav>
+
+  <main class="reward-main">
+
+    <!-- 签 1：星星 -->
+    <section class="panel on" data-panel="stars">
+      <div class="star-card">
+        <span class="star-ico"><span class="ico" data-ico="star"></span></span>
+        <b class="star-num" data-star-count>0</b>
+        <span class="star-week">本周又收集了 <i id="weekN">36</i> 颗星星</span>
+      </div>
+      <p class="sub-title"><span class="ico" data-ico="star"></span>我的徽章</p>
+      <div class="badge-grid" id="badgeGrid"></div>
+    </section>
+
+    <!-- 签 2：徽章（全部徽章网格） -->
+    <section class="panel" data-panel="badges">
+      <div class="badge-grid" id="badgeGrid2"></div>
+    </section>
+
+    <!-- 签 3：成长树（组件 B） -->
+    <section class="panel" data-panel="tree">
+      <div class="tree-box" id="tree"></div>
+      <p class="tree-assets">
+        <span>叶子 <b id="taLeaf">0</b></span>
+        <span>花朵 <b id="taFlower">0</b></span>
+        <span>果实 <b id="taFruit">0</b></span>
+        <span>枝条 <b id="taBranch">0</b></span>
+      </p>
+    </section>
+
+    <!-- 签 4：商店（4 件装饰商品） -->
+    <section class="panel" data-panel="shop">
+      <div class="shop-grid" id="shopGrid"></div>
+    </section>
+
+  </main>
+
+<script src="js/data.js"></script>
+<script src="js/common.js"></script>
+<script src="js/tts.js"></script>
+<script src="js/tree-motion-data.js"></script>
+<script src="js/tree-motion.js"></script>
+<script src="js/jiangli.js"></script>
+</body>
+</html>

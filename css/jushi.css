@@ -1,0 +1,119 @@
+/* ============================================================
+   词语乐园·句式积木 · jushi.css（任务书 §6.7）
+   页面主色 --primary；积木三色对应三类句式槽。
+   ============================================================ */
+
+.js-main{
+  display:flex; flex-direction:column; align-items:center; gap:18px;
+  padding:10px 26px 150px;   /* 底部留白须大于导航栏高度，「再拼一句」不被遮挡 */
+  min-height:calc(100vh - 76px - 76px - 30px);
+}
+
+/* 拼出的整句（32px 楷体） */
+.js-sentence{
+  font-family:var(--font-kai);
+  font-size:32px; color:var(--text); letter-spacing:2px;
+  animation:sentenceIn .3s ease-out both;
+}
+.js-sentence.hidden{ display:none; }
+@keyframes sentenceIn{ from{ transform:translateY(8px); opacity:0; } }
+
+/* ---- 句式框架卡 ---- */
+.frame-card{
+  width:min(860px, 92vw);
+  padding:22px;
+  border:4px solid var(--primary);
+  display:flex; flex-direction:column; align-items:center; gap:16px;
+}
+.js-slots{ display:flex; gap:20px; width:100%; justify-content:center; }
+.slot-box{ display:flex; flex-direction:column; align-items:center; gap:8px; }
+.slot{
+  width:180px; height:104px;
+  border:3px dashed var(--sc, var(--text-soft)); border-radius:16px;
+  display:flex; align-items:center; justify-content:center;
+  transition:background .15s ease-out;
+}
+.slot[data-type="who"]{ --sc:var(--c-pinyin); }
+.slot[data-type="where"]{ --sc:var(--c-shengzi); }
+.slot[data-type="what"]{ --sc:var(--primary); }
+.slot.hover{ background:rgba(255,138,61,.10); }   /* 拖拽悬停提示 */
+.slot-label{ font-size:19px; font-weight:bold; }
+.slot-label.who{ color:var(--c-pinyin); }
+.slot-label.where{ color:var(--c-shengzi); }
+.slot-label.what{ color:var(--primary); }
+.slot-hint{ font-size:16px; color:var(--text-soft); opacity:.7; }
+/* 已放入积木的凹槽 */
+.slot .block-in{ cursor:default; }
+
+/* 场景插图：成句后出现（与句子对应的三联词图，仅一次 500ms 入场） */
+.scene{ width:min(460px, 86%); }
+.scene.hidden{ display:none; }
+.scene svg{ width:100%; height:auto; animation:sceneIn .5s ease-out both; }
+/* 三联词图：每格＝词的 AI 插图 + 词标签，点击朗读 */
+.scene{ display:flex; gap:12px; justify-content:center; }
+.scene-cell{
+  flex:1; min-width:0;
+  display:flex; flex-direction:column; align-items:center; gap:6px;
+  padding:8px 8px 10px; border-radius:16px;
+  background:rgba(255,138,61,.10); border:2px solid transparent;
+}
+.scene-cell:hover{ border-color:var(--primary); }
+.scene-cell img{
+  width:100%; aspect-ratio:1/1; object-fit:cover;
+  border-radius:12px; display:block;
+  animation:sceneIn .5s ease-out both;
+}
+.scene-cell .scene-emoji{
+  width:100%; aspect-ratio:1/1; display:flex; align-items:center; justify-content:center;
+  font-size:64px; background:#fff; border-radius:12px;
+  animation:sceneIn .5s ease-out both;
+}
+.scene-label{
+  font-size:19px; font-weight:bold; color:var(--text);
+  font-family:var(--font-kai);
+}
+/* 轮次进度（第几题/共几题） */
+.js-round{
+  font-size:20px; font-weight:bold; color:var(--primary);
+  margin:0; letter-spacing:1px;
+}
+@keyframes sceneIn{ from{ transform:scale(.85); opacity:0; } }
+
+/* ---- 积木区 ---- */
+.tray{
+  width:min(860px, 92vw);
+  min-height:96px;
+  display:flex; gap:16px; flex-wrap:wrap; justify-content:center;
+  padding:10px;
+}
+/* 彩色积木：圆角矩形色块 + 词 + emoji 配图 */
+.block{
+  min-width:150px; height:76px;
+  border-radius:16px;
+  padding:0 20px;
+  color:#fff; font-size:24px; font-weight:bold;
+  display:inline-flex; align-items:center; justify-content:center; gap:12px;
+  box-shadow:var(--shadow-card);
+  touch-action:none;         /* 拖拽时不触发页面滚动 */
+  cursor:grab;
+}
+.block .b-emoji{ font-size:30px; }
+.block.who{ background:linear-gradient(160deg, var(--c-pinyin-hi), var(--c-pinyin)); }
+.block.where{ background:linear-gradient(160deg, var(--c-shengzi-hi), var(--c-shengzi)); }
+.block.what{ background:linear-gradient(160deg, var(--primary-hi), var(--primary)); }
+/* 拖动中：随手指方向轻微倾斜（≤6°）+ 阴影加深 */
+.block.dragging{
+  position:fixed; z-index:40;
+  box-shadow:0 12px 26px rgba(0,0,0,.16);
+  cursor:grabbing;
+}
+/* 吸附成功：弹一下（弹簧缩放） */
+@keyframes blockPop{ 0%{transform:scale(1);} 45%{transform:scale(1.08);} 100%{transform:scale(1);} }
+.block.pop{ animation:blockPop .3s ease-out; }
+/* 拖错：积木弹回原位 */
+.block.returning{ transition:left .25s ease-out, top .25s ease-out; }
+
+@media (max-width:700px){
+  .slot{ width:30vw; height:92px; }
+  .block{ min-width:34vw; }
+}

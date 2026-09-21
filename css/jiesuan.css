@@ -1,0 +1,103 @@
+/* ============================================================
+   结算页 · jiesuan.css（任务书 §6.9）
+   时间轴：星星雨 1100–2000ms 随机延迟；徽章/按钮由 JS 延时出现。
+   ============================================================ */
+
+body.end-page{ overflow:hidden; position:relative; min-height:100vh; }
+
+/* 中央浅黄大圆形光晕（静态） */
+.end-glow{
+  position:absolute; left:50%; top:46%;
+  width:640px; height:640px; transform:translate(-50%,-50%);
+  border-radius:50%; pointer-events:none;
+  background:radial-gradient(circle, rgba(255,213,79,.28), transparent 66%);
+}
+/* 散落黄色星星（静态装饰） */
+.end-deco span{ position:absolute; font-size:26px; opacity:.8; }
+
+/* ---- 星星雨：18 颗从顶部飘落并向右上角聚拢 ---- */
+.end-rain{ position:absolute; inset:0; overflow:hidden; pointer-events:none; }
+.rain-star{
+  position:absolute; top:-70px; font-size:32px;
+  animation:rainFly var(--dur,1.4s) cubic-bezier(.35,.5,.4,1) both;
+}
+@keyframes rainFly{
+  0%  { transform:translate(0,0) rotate(0); opacity:.95; }
+  100%{ transform:translate(var(--dx), var(--dy)) rotate(300deg) scale(.45); opacity:.85; }
+}
+/* 右上角星星罐 */
+.end-jar{
+  position:absolute; right:5vw; top:16px;
+  width:64px; height:64px; border-radius:50%;
+  background:var(--card); box-shadow:var(--shadow-card);
+  display:flex; align-items:center; justify-content:center;
+  color:var(--c-jiangli);
+}
+.end-jar .ico{ width:38px; height:38px; }
+
+/* ---- 主列 ---- */
+.end-main{
+  min-height:100vh;
+  display:flex; flex-direction:column; align-items:center; justify-content:center;
+  gap:12px; padding:16px; text-align:center;
+}
+#planetBox{ width:200px; height:200px; animation:planetIn .4s ease-out both; }
+@keyframes planetIn{ from{ transform:scale(.9); opacity:0; } }
+
+.end-title{
+  font-size:40px; font-weight:bold; color:var(--text); letter-spacing:2px;
+}
+.end-sub{ font-size:22px; color:var(--text-soft); letter-spacing:1px; }
+
+/* 成长树卡片：白底圆角 + 左上角浅色阶段标签 */
+.tree-card{
+  position:relative;
+  padding:14px 18px 8px;
+  width:min(340px, 84vw);
+}
+.tree-card.bounce{ animation:cardBounce .4s ease-out; }
+@keyframes cardBounce{ 0%{transform:scale(1);} 50%{transform:scale(1.05);} 100%{transform:scale(1);} }
+.stage-label{
+  position:absolute; left:14px; top:12px;
+  font-size:17px; color:var(--text-soft);
+  background:var(--bg); border-radius:999px; padding:4px 14px;
+}
+.end-tree{ height:240px; }
+.end-tree .gtm{ pointer-events:none; }
+
+/* +N 颗星星胶囊：阳光黄底 + 白色星 + 白字 */
+.star-capsule{
+  min-height:60px; padding:8px 30px;
+  border-radius:999px;
+  background:var(--c-jiangli); color:#fff;
+  font-size:26px; font-weight:bold;
+  display:inline-flex; align-items:center; gap:10px;
+  box-shadow:var(--shadow-soft);
+}
+.cap-star{ width:26px; height:26px; }
+
+/* 解锁徽章卡 */
+.badge-card{
+  background:var(--card); border-radius:16px;
+  box-shadow:var(--shadow-card);
+  padding:10px 22px;
+  display:inline-flex; align-items:center; gap:14px;
+}
+.badge-card.hidden{ display:none; }
+.badge-ball{
+  width:52px; height:52px; border-radius:50%;
+  background:var(--primary); color:#fff;
+  display:flex; align-items:center; justify-content:center;
+}
+.badge-ball .ico{ width:28px; height:28px; }
+.badge-text{ display:flex; flex-direction:column; align-items:flex-start; }
+.badge-text i{ font-style:normal; font-size:14px; color:var(--text-soft); }
+.badge-text b{ font-size:20px; color:var(--text); }
+
+.end-home{ margin-top:6px; height:80px; }
+
+@media (max-width:700px){
+  #planetBox{ width:150px; height:150px; }
+  .end-tree{ height:200px; }
+  .end-title{ font-size:32px; }
+}

@@ -1,0 +1,94 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="manifest" href="manifest.json">
+<meta name="theme-color" content="#FF8A3D">
+<title>汉字小星球 · 我的小星球</title>
+<link rel="stylesheet" href="css/base.css">
+<link rel="stylesheet" href="css/tree-motion.css">
+<link rel="stylesheet" href="css/home.css">
+</head>
+<body class="page">
+
+  <!-- ===== 顶部状态条：头像位＝组件 A（smile 56×56）===== -->
+  <header class="topbar">
+    <span class="avatar-planet" id="avatarPlanet" aria-hidden="true"></span>
+    <button class="star-pill pressable">⭐ <b data-star-count>0</b></button>
+    <span class="topbar-space"></span>
+    <button class="icon-btn btn-volume pressable" aria-label="音量开关"></button>
+  </header>
+
+  <main class="home-main">
+
+    <!-- 语音问候气泡（600ms 后自动播报「你好，小星！」） -->
+    <div class="greet" id="greet">
+      <span class="ico greet-ico" data-ico="speaker"></span><span>你好，小星！</span>
+    </div>
+
+    <!-- 中央成长树主视觉：TreeMotion 挂载，约占屏 35%，不可被挤占 -->
+    <div class="tree-wrap">
+      <div class="tree" id="tree"></div>
+    </div>
+
+    <!-- 今日小任务：4 张横向任务卡（拼音/生字/朗读/词语） -->
+    <p class="tasks-title">今天的小任务</p>
+    <div class="tasks" aria-label="今天的小任务">
+      <button class="task pressable" data-task="pinyin" data-href="pinyin.html" data-say="拼音星球出发">
+        <span class="task-ico" data-ico="planet"></span><span class="task-name">拼音星球</span><span class="task-ring"></span>
+      </button>
+      <button class="task pressable" data-task="shengzi" data-href="shengzi.html" data-say="生字森林出发">
+        <span class="task-ico" data-ico="tree"></span><span class="task-name">生字森林</span><span class="task-ring"></span>
+      </button>
+      <button class="task pressable" data-task="langdu" data-href="langdu.html" data-say="朗读剧场开演">
+        <span class="task-ico" data-ico="mask"></span><span class="task-name">朗读剧场</span><span class="task-ring"></span>
+      </button>
+      <button class="task pressable" data-task="jushi" data-href="jushi.html" data-say="词语乐园欢迎你">
+        <span class="task-ico" data-ico="blocks"></span><span class="task-name">词语乐园</span><span class="task-ring"></span>
+      </button>
+    </div>
+
+    <!-- 四大模块按钮：主色渐变 + 白色大图标 + 模块名 + 7 个进度小点 -->
+    <nav class="modules" aria-label="四大学习模块">
+      <button class="module pressable" data-href="pinyin.html" data-say="拼音星球出发" style="--mc:var(--c-pinyin);--mc2:var(--c-pinyin-hi)">
+        <span class="module-ico" data-ico="planet"></span>
+        <span class="module-name">拼音星球</span>
+        <span class="module-dots" data-module="pinyin"></span>
+      </button>
+      <button class="module pressable" data-href="shengzi.html" data-say="生字森林出发" style="--mc:var(--c-shengzi);--mc2:var(--c-shengzi-hi)">
+        <span class="module-ico" data-ico="tree"></span>
+        <span class="module-name">生字森林</span>
+        <span class="module-dots" data-module="shengzi"></span>
+      </button>
+      <button class="module pressable" data-href="langdu.html" data-say="朗读剧场开演" style="--mc:var(--c-langdu);--mc2:var(--c-langdu-hi)">
+        <span class="module-ico" data-ico="mask"></span>
+        <span class="module-name">朗读剧场</span>
+        <span class="module-dots" data-module="langdu"></span>
+      </button>
+      <button class="module pressable" data-href="jushi.html" data-say="词语乐园欢迎你" style="--mc:var(--primary);--mc2:var(--primary-hi)">
+        <span class="module-ico" data-ico="blocks"></span>
+        <span class="module-name">词语乐园</span>
+        <span class="module-dots" data-module="jushi"></span>
+      </button>
+    </nav>
+  </main>
+
+  <!-- ===== 底部导航：5 个 SVG 线性图标，无文字 ===== -->
+  <footer class="navbar">
+    <button class="nav-btn pressable is-current" data-say="已经在首页啦"><span class="ico" data-ico="home"></span></button>
+    <button class="nav-btn pressable" data-href="ditu.html" data-say="闯关地图"><span class="ico" data-ico="map"></span></button>
+    <button class="nav-btn pressable" data-href="langdu.html" data-say="朗读剧场开演"><span class="ico" data-ico="mic"></span></button>
+    <button class="nav-btn pressable" data-href="jiangli.html" data-say="星星罐"><span class="ico" data-ico="jar"></span></button>
+    <button class="nav-btn nav-lock pressable" data-href="parent.html"><span class="ico" data-ico="lock"></span></button>
+  </footer>
+
+<script src="js/data.js"></script>
+<script src="js/common.js"></script>
+<script src="js/tts.js"></script>
+<script src="js/tree-motion-data.js"></script>
+<script src="js/tree-motion.js"></script>
+<script src="js/planet.js"></script>
+<script src="js/home.js"></script>
+</body>
+</html>

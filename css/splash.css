@@ -1,0 +1,79 @@
+/* ============================================================
+   启动欢迎页 · splash.css（任务书 §6.1）
+   运动元素仅 2 类：组件 A 视频 + 星点浮动；柔光静态。
+   ============================================================ */
+body{ overflow:hidden; position:relative; min-height:100vh; }
+
+/* ---- 柔光 ×2：静态大光斑 ---- */
+.glow{ position:absolute; border-radius:50%; pointer-events:none; }
+.glow-a{
+  width:600px; height:600px; left:-140px; top:-180px;
+  background:radial-gradient(circle, rgba(255,213,79,.20), transparent 68%);
+}
+.glow-b{
+  width:560px; height:560px; right:-160px; bottom:-200px;
+  background:radial-gradient(circle, rgba(79,195,247,.15), transparent 68%);
+}
+
+/* ---- 星点 ×6：极缓慢上下浮动（±6px，4s，错峰） ---- */
+.sparks span{
+  position:absolute; left:var(--sx); top:var(--sy);
+  width:var(--ss); height:var(--ss); border-radius:50%;
+  background:radial-gradient(circle at 35% 35%, #FFF6D8, var(--c-jiangli));
+  box-shadow:0 0 12px rgba(255,213,79,.55);
+  animation:sparkFloat 4s ease-in-out infinite;
+  animation-delay:var(--sd);
+}
+@keyframes sparkFloat{
+  0%,100%{ transform:translateY(6px); opacity:.75; }
+  50%    { transform:translateY(-6px); opacity:1; }
+}
+
+/* ---- 主视觉列 ---- */
+.splash-main{
+  min-height:100vh;
+  display:flex; flex-direction:column; align-items:center; justify-content:center;
+  gap:10px; padding:24px; text-align:center;
+}
+/* 组件 A：260×260，标题上方水平居中 */
+#planetBox{ width:260px; height:260px; animation:planetIn .6s ease-out both; }
+@keyframes planetIn{ from{ transform:scale(.92); opacity:0; } }
+
+.splash-title{
+  font-family:var(--font-round);
+  font-size:48px; font-weight:bold; color:var(--text);
+  letter-spacing:6px; margin-top:4px;
+}
+.splash-sub{
+  font-size:20px; color:var(--text-soft); letter-spacing:3px;
+}
+
+/* ---- 开始探险按钮：全圆角橙色，高 80px ---- */
+.btn-start{
+  margin-top:36px;
+  min-width:340px; height:80px;
+  border-radius:var(--radius-btn);
+  background:linear-gradient(180deg, var(--primary-hi), var(--primary));
+  color:#fff; font-size:30px; font-weight:bold; letter-spacing:4px;
+  display:inline-flex; align-items:center; justify-content:center; gap:14px;
+  box-shadow:var(--shadow-soft);
+}
+.start-ico{ width:26px; height:26px; }
+
+/* ---- 左下家长入口（中性灰，尺寸小，点击不播报） ---- */
+.splash-parent{
+  position:absolute; left:24px; bottom:22px;
+  min-width:var(--hotzone); min-height:var(--hotzone);
+  padding:0 18px; border-radius:999px;
+  font-size:18px; color:var(--text-soft);
+  background:#fff; box-shadow:var(--shadow-card);
+  display:inline-flex; align-items:center; gap:8px;
+}
+.parent-ico{ width:22px; height:22px; }
+.splash-volume{ position:absolute; right:24px; bottom:22px; }
+
+/* ---- 窄屏：只收尺寸不减元素 ---- */
+@media (max-width:700px){
+  #planetBox{ width:210px; height:210px; }
+  .btn-start{ min-width:76vw; }
+}

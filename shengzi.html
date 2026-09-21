@@ -1,0 +1,112 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="manifest" href="manifest.json">
+<meta name="theme-color" content="#FF8A3D">
+<title>汉字小星球 · 生字森林</title>
+<link rel="stylesheet" href="css/base.css">
+<link rel="stylesheet" href="css/shengzi.css">
+</head>
+<body class="page" style="--mc:var(--c-shengzi)">
+
+  <!-- 顶栏：返回 + 步骤点（第 4 点亮） -->
+  <header class="learn-bar">
+    <button class="back-btn pressable" data-say="回首页"><span class="ico" data-ico="back"></span></button>
+    <div class="step-dots" aria-hidden="true">
+      <span class="sdot"></span><span class="sdot"></span><span class="sdot"></span><span class="sdot on"></span><span class="sdot"></span>
+    </div>
+  </header>
+
+  <!-- ===== 顶部状态条（§6.0 全局框架，头像位＝笑脸图标）===== -->
+  <header class="topbar">
+    <span class="avatar-smile ico" data-ico="smile" aria-hidden="true"></span>
+    <button class="star-pill pressable">⭐ <b data-star-count>0</b></button>
+    <span class="topbar-space"></span>
+    <button class="icon-btn btn-volume pressable" aria-label="音量开关"></button>
+  </header>
+
+  <main class="sz-main">
+    <!-- 左列：田字格 + 三层字形 + 笔顺控件 -->
+    <section class="sz-left">
+      <div class="tian card">
+        <!-- 格线：十字虚线 + 两条对角线（浅绿虚线） -->
+        <svg class="tian-grid" viewBox="0 0 100 100" aria-hidden="true">
+          <path d="M50 2v96M2 50h96" stroke-dasharray="4 5"/>
+          <path d="M8 8L92 92M92 8L8 92" stroke-dasharray="4 5" opacity=".5"/>
+        </svg>
+        <!-- 中层：半透明描红字 -->
+        <span class="tian-char" id="charShadow">人</span>
+        <!-- 笔顺 SVG：底层描红轮廓 + 顶层当前笔画高亮（内置字） -->
+        <svg class="tian-strokes" viewBox="0 0 100 100" id="strokesSvg"></svg>
+        <!-- 教材字：Hanzi Writer 渲染（js/shengzi.js 二选一驱动） -->
+        <div id="hwBox" class="hw hidden"></div>
+      </div>
+
+      <!-- 四个胶囊控件：上一个字 / 下一个字 / 单笔 / 整字（暂停在笔顺开始后可用） -->
+      <div class="sz-controls">
+        <button class="btn-sub pressable" id="btnPrevChar">
+          <span class="ico" data-ico="back"></span><span>上一个字</span>
+        </button>
+        <button class="btn-sub pressable" id="btnPause">
+          <span class="ico" data-ico="pause"></span><span id="pauseText">暂停</span>
+        </button>
+        <button class="btn-sub pressable" id="btnOne">
+          <span class="ico" data-ico="replay1"></span><span>单笔</span>
+        </button>
+        <button class="btn-sub pressable" id="btnAll">
+          <span class="ico" data-ico="replay"></span><span>整字</span>
+        </button>
+        <button class="btn-sub pressable" id="btnNextChar">
+          <span class="ico" data-ico="play"></span><span>下一个字</span>
+        </button>
+      </div>
+    </section>
+
+    <!-- 右列：播报条 / 本字信息卡 / 进度卡 / 字卡册卡 / 提示条 -->
+    <aside class="sz-right">
+      <div class="sz-say card">
+        <span class="ico" data-ico="speaker"></span><span id="strokeSay">第一笔，撇</span>
+      </div>
+      <!-- 本字信息卡：大字 + 拼音 + 组词（点击词语朗读） -->
+      <div class="sz-charinfo card">
+        <span class="sz-big" id="charInfoBig">人</span>
+        <div class="sz-charinfo-right">
+          <span class="sz-py" id="charInfoPy">rén</span>
+          <div class="sz-words" id="charInfo"></div>
+        </div>
+      </div>
+      <div class="sz-progress">
+        <p class="sz-progress-text">第 <b id="strokeNo">1</b> 笔 · 共 <b id="strokeTotal">2</b> 笔</p>
+        <div class="sz-progress-dots" id="strokeDots"></div>
+      </div>
+      <button class="sz-zicard card pressable" id="btnZicard">
+        <span class="zicard-mini"><span id="zicardChar">人</span></span>
+        <span class="zicard-text"><b>字卡册</b><i>已收 <em id="ziCount">0</em> 个字</i></span>
+      </button>
+      <div class="sz-hint">
+        <span class="ico" data-ico="train"></span><span>跟着小火车走哦</span>
+      </div>
+    </aside>
+  </main>
+
+  <!-- ===== 底部导航：5 个 SVG 线性图标，无文字 ===== -->
+  <footer class="navbar">
+    <button class="nav-btn pressable" data-href="home.html" data-say="回首页"><span class="ico" data-ico="home"></span></button>
+    <button class="nav-btn pressable" data-href="ditu.html" data-say="闯关地图"><span class="ico" data-ico="map"></span></button>
+    <button class="nav-btn pressable is-current" data-say="继续探险"><span class="ico" data-ico="mic"></span></button>
+    <button class="nav-btn pressable" data-href="jiangli.html" data-say="星星罐"><span class="ico" data-ico="jar"></span></button>
+    <button class="nav-btn nav-lock pressable" data-href="parent.html"><span class="ico" data-ico="lock"></span></button>
+  </footer>
+
+
+<script src="js/data.js"></script>
+<script src="js/common.js"></script>
+<script src="js/report.js"></script>
+<script src="js/tts.js"></script>
+<script src="js/planner.js"></script>
+<script src="assets/lib/hanzi-writer.min.js"></script>
+<script src="js/shengzi.js"></script>
+</body>
+</html>

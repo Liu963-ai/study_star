@@ -1,0 +1,220 @@
+/* ============================================================
+   成长树动态形象 · tree-motion.css
+   ------------------------------------------------------------
+   原理：把 3D 渲染图按「地面 / 树干 / 树冠 / 果实」切成独立图层，
+   叠回原位后分层驱动动效——观感与原图完全一致，但整棵树是活的：
+     地面   静止（树站在地上，地不动）
+     整树   绕树根轻摆 ±1.15°，周期 7.2s
+     树干   附加 ±0.22° 滞后摆（有韧性感）
+     树冠   附加 ±0.5° 滞后摆 + 呼吸 scale 1.014（相位再错开）
+     果实   各自 3.6s 轻颤（果柄为轴的小钟摆 + 微膨胀）
+     粒子   3 片落叶 + 3 颗星尘（待机氛围）
+     生长   24s 纯 CSS 时间轴，六阶段接力登场 + 星尘迸发（无缝循环）
+   无缝性：所有周期都是 14.4s（待机）/ 24s（生长）的公因子，
+   首尾关键帧对称，循环点无跳变。
+   响应 prefers-reduced-motion：全部动效关闭，静观原画。
+   ============================================================ */
+
+.gtm{
+  position:relative;
+  width:100%;
+  aspect-ratio:1/1;
+  --wind:1;                 /* 风力倍率（乘在所有摆幅上） */
+  --t-sway:7.2s;            /* 整树/树干/树冠摆动周期 */
+  --t-breathe:7.2s;         /* 树冠呼吸周期 */
+  --t-fruit:3.6s;           /* 果实轻颤周期 */
+  --t-leaf:7.2s;            /* 落叶周期 */
+  --t-star:4.8s;            /* 星尘闪烁周期 */
+  --leaf-a:#8CB36A;         /* 落叶用色（JS 会按阶段覆盖） */
+  --leaf-b:#C9DE8B;
+  pointer-events:none;
+  user-select:none;
+  -webkit-user-drag:none;
+}
+/* 生长循环模式：周期全部换成 24s 的公因子 */
+.gtm.gtm--grow-clock{ --t-sway:6s; --t-breathe:6s; --t-fruit:3s; }
+
+/* ---------- 图层基元 ---------- */
+.gtm__lyr{
+  position:absolute; inset:0;
+  width:100%; height:100%;
+  display:block;
+}
+.gtm__lyr img, .gtm__fruit img{ display:block; width:100%; height:100%; }
+
+/* ---------- 摆动系统 ---------- */
+.gtm__sway{
+  position:absolute; inset:0;
+  transform-origin:calc(var(--px)*100%) calc(var(--py)*100%);
+  animation:gtmSway var(--t-sway) ease-in-out infinite;
+  will-change:transform;
+}
+.gtm__trunkg{
+  position:absolute; inset:0;
+  transform-origin:calc(var(--px)*100%) calc(var(--py)*100%);
+  animation:gtmTrunk var(--t-sway) ease-in-out infinite;
+  animation-delay:-0.55s;                    /* 滞后：树干跟着树冠走 */
+  will-change:transform;
+}
+.gtm__canopyg{
+  position:absolute; inset:0;
+  transform-origin:calc(var(--px)*100%) calc(var(--py)*100%);
+  animation:gtmCanopy var(--t-sway) ease-in-out infinite;
+  animation-delay:-1.35s;                    /* 更大的滞后：冠梢甩得最远 */
+  will-change:transform;
+}
+.gtm__breath{
+  position:absolute; inset:0;
+  transform-origin:calc(var(--px)*100%) calc(var(--py)*100%);
+  animation:gtmBreath var(--t-breathe) ease-in-out infinite;
+  animation-delay:-3.6s;                     /* 与摆动反相：一起一伏 */
+  will-change:transform;
+}
+@keyframes gtmSway{
+  0%   { transform:rotate(calc(var(--wind) * -1.15deg)); }
+  50%  { transform:rotate(calc(var(--wind) *  1.15deg)); }
+  100% { transform:rotate(calc(var(--wind) * -1.15deg)); }
+}
+@keyframes gtmTrunk{
+  0%   { transform:rotate(calc(var(--wind) * -0.22deg)); }
+  50%  { transform:rotate(calc(var(--wind) *  0.22deg)); }
+  100% { transform:rotate(calc(var(--wind) * -0.22deg)); }
+}
+@keyframes gtmCanopy{
+  0%   { transform:rotate(calc(var(--wind) * -0.5deg)) translateX(calc(var(--wind) * -0.12%)); }
+  50%  { transform:rotate(calc(var(--wind) *  0.5deg)) translateX(calc(var(--wind) *  0.12%)); }
+  100% { transform:rotate(calc(var(--wind) * -0.5deg)) translateX(calc(var(--wind) * -0.12%)); }
+}
+@keyframes gtmBreath{
+  0%   { transform:scale(1); }
+  50%  { transform:scale(1.014); }
+  100% { transform:scale(1); }
+}
+
+/* ---------- 果实：以果柄为轴的小钟摆 ---------- */
+.gtm__fruit{
+  position:absolute;
+  transform-origin:50% 8%;
+  animation:gtmFruit var(--t-fruit) ease-in-out infinite;
+  animation-delay:var(--fd, 0s);
+  will-change:transform;
+}
+@keyframes gtmFruit{
+  0%   { transform:translateY(0)      rotate(0deg)    scale(1); }
+  50%  { transform:translateY(-5%)    rotate(-2.6deg) scale(1.035); }
+  100% { transform:translateY(0)      rotate(0deg)    scale(1); }
+}
+
+/* ---------- 落叶（满幅定位层上做 % 位移，天然随容器缩放） ---------- */
+.gtm__fx{ position:absolute; inset:0; }
+.gtm__leaf{
+  position:absolute; inset:0;
+  animation:gtmFall var(--t-leaf) linear infinite;
+  animation-delay:var(--ld, 0s);
+  opacity:0;
+}
+.gtm__leaf i{
+  position:absolute; left:var(--lx); top:var(--ly);
+  width:var(--ls); aspect-ratio:1.15/1;
+  background:linear-gradient(135deg, var(--leaf-b), var(--leaf-a) 78%);
+  border-radius:0 100% 4% 100%;
+  box-shadow:0 1px 2px rgba(62,39,35,.10);
+  animation:gtmLeafSwing 1.8s ease-in-out infinite alternate;
+}
+@keyframes gtmFall{
+  0%        { transform:translate(0, -1.5%); opacity:0; }
+  6%        { opacity:.95; }
+  45%       { transform:translate(var(--dx-mid), var(--dy-mid)); }
+  84%       { transform:translate(var(--dx-end), var(--dy-end)); opacity:.88; }
+  93%, 100% { transform:translate(calc(var(--dx-end) * .92), calc(var(--dy-end) * 1.05)); opacity:0; }
+}
+@keyframes gtmLeafSwing{
+  from{ transform:rotate(-34deg); }
+  to  { transform:rotate(40deg); }
+}
+
+/* ---------- 星尘：树冠四周的暖黄微光 ---------- */
+.gtm__tw{
+  position:absolute; inset:0;
+  animation:gtmTwinkle var(--t-star) ease-in-out infinite;
+  animation-delay:var(--td, 0s);
+}
+.gtm__tw span{
+  position:absolute; left:var(--sx); top:var(--sy);
+  width:var(--ss); aspect-ratio:1;
+  background:linear-gradient(180deg, #FFF6D8, #FFD54F);
+  clip-path:polygon(50% 0, 61% 39%, 100% 50%, 61% 61%, 50% 100%, 39% 61%, 0 50%, 39% 39%);
+  opacity:0;
+}
+@keyframes gtmTwinkle{
+  0%       { transform:scale(.1) rotate(0deg);  opacity:0; }
+  12%      { transform:scale(1)  rotate(20deg); opacity:.95; }
+  26%,100% { transform:scale(.1) rotate(45deg); opacity:0; }
+}
+
+/* ============================================================
+   生长循环（24s 纯 CSS 时间轴）
+   每阶段一个窗口（4s）：弹性登场 → 静立 → 轻收谢幕；
+   第 i 阶用 -4s*i 的延迟错峰，窗口首尾相接 ⇒ 循环无缝。
+   ============================================================ */
+.gtm-cycle{
+  position:relative;
+  width:100%;
+  aspect-ratio:1/1;
+}
+.gtm-cycle .gtm{
+  position:absolute; inset:0;
+  transform-origin:calc(var(--px)*100%) calc(var(--py)*100%);
+  opacity:0;
+  animation:gtmCycle 24s linear infinite;
+  animation-delay:calc(var(--i) * 4s);   /* 正延迟：第 i 阶在 4i 秒登场 */
+}
+@keyframes gtmCycle{
+  0%      { opacity:0; transform:scale(.88); animation-timing-function:cubic-bezier(.3, 1.45, .5, 1); }
+  1.8%    { opacity:1; transform:scale(1.05); }
+  3.4%    { transform:scale(1); }
+  15.1%   { opacity:1; transform:scale(1); }
+  16.66%  { opacity:0; transform:scale(.955); }
+  16.67%, 100% { opacity:0; transform:scale(.88); }
+}
+
+/* 转场星尘迸发：六组，每组六颗，随登场时刻向外辐射 */
+.gtm__burst{
+  position:absolute; inset:0;
+  animation:gtmBurst 24s linear infinite;
+  animation-delay:var(--bd, 0s);
+  opacity:0;
+}
+.gtm__burst span{
+  position:absolute; left:var(--sx); top:var(--sy);
+  width:var(--ss); aspect-ratio:1;
+  background:linear-gradient(180deg, #FFF6D8, #FFD54F);
+  clip-path:polygon(50% 0, 61% 39%, 100% 50%, 61% 61%, 50% 100%, 39% 61%, 0 50%, 39% 39%);
+}
+@keyframes gtmBurst{
+  0%      { transform:translate(0, 0) scale(.15) rotate(0deg);   opacity:0; }
+  0.55%   { opacity:.95; }
+  2.9%    { transform:translate(var(--bx), var(--by)) scale(1) rotate(110deg); opacity:0; }
+  100%    { transform:translate(0, 0) scale(.15) rotate(0deg);   opacity:0; }
+}
+
+/* ---------- 六阶一览 ---------- */
+.gtm-gallery{
+  display:grid;
+  grid-template-columns:repeat(auto-fit, minmax(150px, 1fr));
+  gap:14px;
+}
+.gtm-cell{ text-align:center; }
+.gtm-cap{
+  margin-top:2px;
+  font-size:14px; font-weight:bold; color:var(--text-soft, #8D6E63);
+  letter-spacing:1px;
+}
+
+/* ---------- 无障碍：系统要求减少动态时，静观原画 ---------- */
+@media (prefers-reduced-motion: reduce){
+  .gtm, .gtm *{ animation:none !important; }
+  .gtm__fx{ display:none; }
+  .gtm-cycle .gtm{ opacity:0; }
+  .gtm-cycle .gtm[data-current="1"]{ opacity:1; }
+}

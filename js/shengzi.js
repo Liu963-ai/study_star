@@ -183,14 +183,17 @@
     if (!u) begin();
     else beginTimer = setTimeout(begin, 2800);   /* 读音约 2s 播完即开画，不因 TTS 慢而久等 */
 
-    /* 预热本字其余语音：组词、各笔画名（后台合成，演示时秒播） */
+    /* 预热本字与下一个字的全部语音（导语/组词/笔画名），点击与切换秒播 */
     if (window.HHTTS && window.HHTTS.prewarm) {
       const strokeTexts = [];
       const total = it.strokes ? it.strokes.length : 0;
       for (let i = 0; i < total; i++) {
         strokeTexts.push('第' + (i + 1) + '笔，' + (it.strokes[i].name || ''));
       }
-      window.HHTTS.prewarm([it.char, ...(it.words || []), ...strokeTexts]);
+      const introOf = c => c.char + (c.pinyin ? '，' + c.pinyin : '') + '。看老师写一遍';
+      const nxt = ITEMS[(ci + 1) % ITEMS.length];           /* 预取下一个字 */
+      window.HHTTS.prewarm([readText, introOf(nxt), it.char, nxt.char,
+        ...(it.words || []), ...strokeTexts]);
     }
   }
 

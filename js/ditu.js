@@ -147,6 +147,10 @@
     const xy = NODE_XY[level - 1];
     train.style.left = xy[0] + '%';
     train.style.top = 'calc(' + xy[1] + '% - 74px)';
+    /* 预热点未解锁提示（含关卡数字，动态文本，不预热则点击冷合成 3-5s） */
+    if (window.HHTTS && window.HHTTS.prewarm) {
+      window.HHTTS.prewarm(['先通过第' + level + '关，小火车才能开到这里']);
+    }
   }
 
   function onNode(n) {

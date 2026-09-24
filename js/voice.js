@@ -104,6 +104,10 @@ window.HHVoice = (function () {
     box.classList.remove('hidden');
     paint();
     paintStatus();
+    /* 预热试听句（当前音色），点「试听」秒播 */
+    if (window.HHTTS && window.HHTTS.prewarm) {
+      window.HHTTS.prewarm(['你好呀，我是你的学习伙伴！']);
+    }
   }
   function close() {
     if (box) box.classList.add('hidden');

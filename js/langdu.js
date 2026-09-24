@@ -145,7 +145,15 @@
   });
 
   /* ---- 三胶囊控件 ---- */
-  btnSlow.addEventListener('click', () => { slow = !slow; btnSlow.classList.toggle('on', slow); });
+  btnSlow.addEventListener('click', () => {
+    slow = !slow;
+    btnSlow.classList.toggle('on', slow);
+    /* 开启慢速后预热当前课文全部句子的慢速变体（换语速＝换缓存键，
+       不预热则每次点「听一听」都要现场合成 3-5 秒） */
+    if (slow && window.HHTTS && window.HHTTS.prewarm) {
+      window.HHTTS.prewarm(TEXTS[textIdx].segs.map(s => s.map(w => w.ch).join('')).slice(0, 8), { rate: 0.8 });
+    }
+  });
   btnTap.addEventListener('click', () => { tapMode = !tapMode; btnTap.classList.toggle('on', tapMode); });
   btnLoop.addEventListener('click', () => { loopMode = !loopMode; btnLoop.classList.toggle('on', loopMode); });
 

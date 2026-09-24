@@ -67,10 +67,6 @@ def enhance_file(path):
     except Exception:
         pass
 
-# 合成全局锁：串行化云端合成。既防止并发同 key 同时写同一个 .part
-# 临时文件互相覆盖，也避免并发打满 edge-tts 上游造成 429/500。
-SYNTH_LOCK = threading.Lock()
-
 # ---- 音色白名单（与 js/tts.js 的 VOICES 一致，便于后续增删） ----
 VOICES = [
     "zh-CN-XiaoxiaoNeural",   # 小霞老师（默认，自然清晰女声）
@@ -82,14 +78,35 @@ VOICES = [
 MAX_TEXT = 200        # 单次合成文本上限（字符）
 MAX_BODY = 4096       # 请求体上限（字节）
 
+# 每 key 一把锁：同一内容的并发请求合并为一次合成（双检锁模式）；
+# 不同 key 互不阻塞——避免单条云端卡死拖垮整站语音。
+_KEY_LOCKS_GUARD = threading.Lock()
+_KEY_LOCKS = {}
+
+
+def _key_lock(key):
+    with _KEY_LOCKS_GUARD:
+        if key not in _KEY_LOCKS:
+            _KEY_LOCKS[key] = threading.Lock()
+        return _KEY_LOCKS[key]
+
+
+# 云端合成并发上限（edge-tts 上游温和限流）
+SYNTH_SEM = threading.BoundedSemaphore(2)
+
 
 def synth_to_file(text, voice, rate, pitch, path):
     """调用 edge-tts 合成一段 mp3 落盘到 path（调用方已构造缓存路径），
-    随后原地做 DSP 音质增强。"""
+    随后原地做 DSP 音质增强。
+    硬超时：云端 WebSocket 偶发卡死会无限挂起（曾把全局锁一起拖死，
+    表现为全站「点击没声音」），这里对整次合成加 40s 上限，超时抛错
+    由调用方返回 500，客户端随即降级浏览器语音，不再无限等待。"""
     async def run():
-        communicate = edge_tts.Communicate(text, voice, rate=rate, pitch=pitch)
+        communicate = edge_tts.Communicate(
+            text, voice, rate=rate, pitch=pitch,
+            connect_timeout=10, receive_timeout=30)
         await communicate.save(path)
-    asyncio.run(run())
+    asyncio.run(asyncio.wait_for(run(), timeout=40))
     enhance_file(path)
 
 
@@ -246,16 +263,20 @@ class Handler(BaseHTTPRequestHandler):
                 return
             path = CACHE_DIR + "/" + key + ".wav"
 
-            # ---- 相同内容命中缓存，不重复合成（加锁防并发写坏 .part） ----
+            # ---- 相同内容命中缓存，不重复合成（每 key 一把锁：
+            #      同 key 请求合并等待，不同 key 互不阻塞；
+            #      一条云端卡死由 synth_to_file 的 40s 硬超时兜底，
+            #      不会再拖死整站语音） ----
             import os
-            with SYNTH_LOCK:
+            with _key_lock(key):
                 if not os.path.exists(path):
                     os.makedirs(CACHE_DIR, exist_ok=True)
                     tmp = path + ".part"
-                    synth_to_file(text, voice,
-                                  ("+" if rate >= 0 else "") + str(rate) + "%",
-                                  ("+" if pitch >= 0 else "") + str(pitch) + "Hz",
-                                  tmp)
+                    with SYNTH_SEM:               # 限制云端并发，防打满上游
+                        synth_to_file(text, voice,
+                                      ("+" if rate >= 0 else "") + str(rate) + "%",
+                                      ("+" if pitch >= 0 else "") + str(pitch) + "Hz",
+                                      tmp)
                     os.replace(tmp, path)
 
             with open(path, "rb") as f:

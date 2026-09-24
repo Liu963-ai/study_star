@@ -145,16 +145,20 @@ window.HHTTS = (function () {
     return job;
   }
 
-  /* ---- 预热：后台批量预合成（并发 1，不与点击播放抢服务队列优先级） ----
-     学习页在启动/切换内容时调用，把将要朗读的文本提前合成进缓存。 */
-  async function prewarm(texts) {
+  /* ---- 预热：后台批量预合成（并发 1），点击时秒播 ----
+     opt.voiceId：为特殊文本（如拼音音节）指定音色，与 speak 的路由一致；
+     opt.rate：为慢速朗读等变体预热（与 speak 的 effRate 计算保持一致）。 */
+  async function prewarm(texts, opt) {
+    opt = opt || {};
     try { if (await ping() === false) return 0; } catch (e) { return 0; }
     const s = getSettings();
+    const voice = (opt.voiceId && VOICES.some(v => v.id === opt.voiceId)) ? opt.voiceId : s.voice;
+    const rate = effRate(s, opt);
     const list = [...new Set((texts || []).filter(Boolean).map(String))].slice(0, 40);
     let done = 0;
     for (const t of list) {
       try {
-        await getUrl(t, s.voice, s.rate, s.pitch);
+        await getUrl(t, voice, rate, s.pitch);
         done++;
       } catch (e) { /* 预热失败静默，点击时仍可现场合成/降级 */ }
     }

@@ -29,13 +29,18 @@
   /* 四声符号（展示用，随拼音颜色变化） */
   const TONE_MARKS = ['ˉ', 'ˊ', 'ˇ', 'ˋ'];
 
-  /* ---- 语音预热：后台预合成，点击时秒播（解决首次合成 1-4s 延迟） ---- */
-  function prewarmTexts(texts) {
-    if (window.HHTTS && window.HHTTS.prewarm) window.HHTTS.prewarm(texts);
+  /* ---- 语音预热：后台预合成，点击时秒播（解决首次合成 1-4s 延迟） ----
+     呼读音/拼音音节走拼音安全音色（与 speak 路由一致）；
+     组字卡的字/词是普通词语，用用户所选音色。 */
+  function pinyinVid() {
+    return window.HHTTS ? window.HHTTS.pinyinVoiceId() : undefined;
+  }
+  function prewarmTexts(texts, opt) {
+    if (window.HHTTS && window.HHTTS.prewarm) window.HHTTS.prewarm(texts, opt);
   }
   function prewarmGroup() {
     if (book) return;
-    prewarmTexts(GROUPS[gi].list.map(x => x.read));
+    prewarmTexts(GROUPS[gi].list.map(x => x.read), { voiceId: pinyinVid() });
   }
   function prewarmCurrent() {
     const it = cur();
@@ -49,9 +54,9 @@
       prewarmTexts([
         ...tones.map(t => t.mark),                                       /* 连读用裸音节 */
         ...tones.map(t => t.mark + '，第' + CN_TONE[t.tone - 1] + '声'),
-        ...(it.chars || []).map(x => x.c),
-        ...(it.chars || []).map(x => x.w)
-      ]);
+        '欢迎来到拼音星球，先听我读，再跟着读一遍。'
+      ], { voiceId: pinyinVid() });
+      prewarmTexts((it.chars || []).map(x => x.c).concat((it.chars || []).map(x => x.w)));
     }, 1500);
   }
 
@@ -241,10 +246,19 @@
   /* ---- 播放示范音：声波柱与声音同步（读呼读音，不是英文字母） ---- */
   function playLetter() {
     const it = cur();
-    speak(book ? it.say : it.read, {
-      onstart: () => wave.classList.add('playing'),
-      onend:   () => wave.classList.remove('playing')
-    });
+    if (book) {
+      speak(it.say, {
+        onstart: () => wave.classList.add('playing'),
+        onend:   () => wave.classList.remove('playing')
+      });
+    } else {
+      /* 呼读音（含 ēi/ēng 等拼音串）一律走拼音安全音色，保证中文音节读法 */
+      speak(it.read, {
+        voiceId: pinyinVid(),
+        onstart: () => wave.classList.add('playing'),
+        onend:   () => wave.classList.remove('playing')
+      });
+    }
   }
   $('btnReplay').addEventListener('click', playLetter);
 

@@ -195,6 +195,11 @@ window.HH = (function () {
       badge: badge,
       readTitle: opt.readTitle || ''   /* 今天读了什么（家长报告用） */
     });
+    /* 跳转结算页前预热结算语音（导航 400ms + 服务端合成在后台继续，
+       结算页开口时大概率已入缓存） */
+    if (window.HHTTS && window.HHTTS.prewarm) {
+      window.HHTTS.prewarm([opt.say, '太棒了！你完成了这一关！'].filter(Boolean));
+    }
     setTimeout(() => { location.href = 'jiesuan.html'; }, 400);
   }
 

@@ -23,7 +23,7 @@ import soundfile as sf
 
 # ---- 固化配置（本工程内路径，字面量） ----
 CACHE_DIR = r"D:\ZCODE\汉字小星球\tts_cache"
-HOST = "127.0.0.1"
+HOST = "0.0.0.0"      # 监听所有网卡：手机/平板可通过电脑局域网 IP 访问语音
 PORT = 7860
 
 # ================= 音质增强（解决机械感与听不清） =================
@@ -125,12 +125,19 @@ class Handler(BaseHTTPRequestHandler):
 
     def _forward_llm(self, data):
         """代理转发智谱 LLM 请求（浏览器直连会跨域，统一走本服务）。
+        访问控制：该代理携带 API Key，仅允许电脑本机（环回地址）调用；
+        局域网设备（手机/平板）只开放 /tts 与 /ping。
         SSRF 防护：仅 https；目标域名白名单；解析出的所有 IP 必须
         均为公网地址（阻断私网/环回/链路本地/保留地址）；禁止重定向。"""
         import urllib.request
         import ipaddress
         import socket
         from urllib.parse import urlparse
+
+        client = ipaddress.ip_address(self.client_address[0])
+        if not (client.is_loopback):
+            self._json(403, {"ok": False, "msg": "llm proxy is local only"})
+            return
 
         key = str(data.get("key", "")).strip()
         model = str(data.get("model", "glm-4-flash"))
@@ -274,5 +281,6 @@ class Handler(BaseHTTPRequestHandler):
 if __name__ == "__main__":
     import os
     os.makedirs(CACHE_DIR, exist_ok=True)
-    print("edge-tts 服务已启动: http://" + HOST + ":" + str(PORT) + "  (缓存目录 " + CACHE_DIR + ")")
+    print("edge-tts 服务已启动: 本机 http://127.0.0.1:" + str(PORT) +
+          "，局域网 http://<电脑IP>:" + str(PORT) + "（缓存目录 " + CACHE_DIR + "）")
     ThreadingHTTPServer((HOST, PORT), Handler).serve_forever()

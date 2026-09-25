@@ -53,8 +53,12 @@
       if (getStars() >= item.price) {
         store.set('stars', getStars() - item.price);
         HH.addStars(0);                         /* 0 星刷新角标（refreshStarUI 未导出） */
+        /* 记录已兑换装饰：首页小树会把它挂到树枝上展示 */
+        const owned = store.get('owned', []);
+        if (owned.indexOf(item.id) < 0) owned.push(item.id);
+        store.set('owned', owned);
         sfx.star();
-        speak('兑换好啦');
+        speak('兑换好啦，' + item.name + '已经挂到你的小树上啦');
       } else {
         speak('星星还不够，再去探险吧');       /* 按钮保持可用，不置灰不变红 */
       }

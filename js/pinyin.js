@@ -243,7 +243,7 @@
     return row;
   }
 
-  /* ---- 播放示范音：声波柱与声音同步（读呼读音，不是英文字母） ---- */
+  /* ---- 播放示范音：声波柱与声音同步（标准拼音标注，非英文字母） ---- */
   function playLetter() {
     const it = cur();
     if (book) {
@@ -252,9 +252,9 @@
         onend:   () => wave.classList.remove('playing')
       });
     } else {
-      /* 呼读音（含 ēi/ēng 等拼音串）一律走拼音安全音色，保证中文音节读法 */
-      speak(it.read, {
-        voiceId: pinyinVid(),
+      /* 标准拼音标注（bō/pō/zhī/ēi…）：由 AudioManager.SYLLABLES 统一转换，
+         绝不把单个字母或汉字直接传给 TTS */
+      speak(window.HHTTS.syllableOf(it.p), {
         onstart: () => wave.classList.add('playing'),
         onend:   () => wave.classList.remove('playing')
       });

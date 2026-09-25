@@ -21,63 +21,177 @@ window.HHTTS = (function () {
      手机/平板通过电脑局域网 IP 打开时，自动指向电脑，语音在手机上也能出声。 */
   const TTS_BASE = 'http://' + (location.hostname || '127.0.0.1') + ':7860';
 
-  /* ---- 音色常量（角色化命名，新增音色只改这里） ----
-     默认音色选 Xiaoxiao（最自然清晰的女声）；云扬为新闻播音腔，吐字最清楚 */
-  const VOICES = [
-    { id: 'zh-CN-XiaoxiaoNeural', name: '小霞老师',   desc: '自然清晰女声', emoji: '👩‍🏫', def: true },
-    { id: 'zh-CN-XiaoyiNeural',   name: '小艺姐姐',   desc: '活泼女声',     emoji: '👧' },
-    { id: 'zh-CN-YunyangNeural',  name: '云扬叔叔',   desc: '播音腔男声',   emoji: '🧑‍🏫' },
-    { id: 'zh-CN-YunxiNeural',    name: '阳光小哥哥', desc: '活泼男声',     emoji: '👦' },
-    { id: 'zh-CN-YunxiaNeural',   name: '萌萌弟弟',   desc: '可爱男声',     emoji: '🧒' }
-  ];
-  /* 语速三档（映射 edge-tts 的 rate 百分比）；-5 比旧默认更快更自然 */
-  const RATES = [{ v: -20, name: '慢' }, { v: -5, name: '正常' }, { v: 5, name: '快' }];
-  /* 音调三档（映射 pitch Hz） */
-  const PITCHES = [{ v: -5, name: '低' }, { v: 0, name: '正常' }, { v: 5, name: '高' }];
-  const DEF = { voice: VOICES[0].id, rate: -5, pitch: 0 };
+  /* ---- 全局统一发音人参数（全软件唯一配置，任何页面不得单独覆盖） ----
+     唯一发音人＝小艺姐姐；语速/音调全局固定。所有场景（声母、韵母、
+     课文、界面）都经由本工具类的同一套参数发声。 */
+  const GLOBAL = {
+    voice: 'zh-CN-XiaoyiNeural',   // 小艺姐姐（全局唯一发音人）
+    rate: -5,                      // 全局统一语速
+    pitch: 0                       // 全局统一音调
+  };
+  const VOICES = [{ id: GLOBAL.voice, name: '小艺姐姐', desc: '统一发音人 · 活泼女声', emoji: '👧', def: true }];
+  const RATES = [{ v: GLOBAL.rate, name: '正常' }];
+  const PITCHES = [{ v: GLOBAL.pitch, name: '正常' }];
+  const DEF = { voice: GLOBAL.voice, rate: GLOBAL.rate, pitch: GLOBAL.pitch };
 
-  /* ---- 存量设置一次性迁移：旧默认（小艺/慢速）切到新默认（更清晰） ----
-     用户若手动选过其他音色则保持不动。 */
-  (function migrateVoice() {
-    if (localStorage.getItem('hh_voiceMigrated') === 'v2') return;
-    const s = JSON.parse(localStorage.getItem('hh_voice') || 'null') || {};
-    if (!s.voice || s.voice === 'zh-CN-XiaoyiNeural') {
-      localStorage.setItem('hh_voice', JSON.stringify({ voice: DEF.voice, rate: DEF.rate, pitch: DEF.pitch }));
-    }
-    localStorage.setItem('hh_voiceMigrated', 'v2');
-  })();
-
-  /* ---- 设置读写：hh_voice，保存后立即生效（每次朗读都读最新值） ---- */
+  /* ---- 全局配置只读出口：所有调用方拿到的永远是同一套参数 ---- */
   function getSettings() {
-    const s = JSON.parse(localStorage.getItem('hh_voice') || 'null') || {};
-    return {
-      voice: VOICES.some(v => v.id === s.voice) ? s.voice : DEF.voice,
-      rate: RATES.some(r => r.v === s.rate) ? s.rate : DEF.rate,
-      pitch: PITCHES.some(p => p.v === s.pitch) ? s.pitch : DEF.pitch
-    };
-  }
-  /* ---- 预热注册表：各页注册自己的预热函数，
-     音色/语速/音调一变，缓存键全部变化——自动触发全站重新预热，
-     避免「换音色后每次点击都要现场合成 2 秒」 ---- */
-  const prewarmers = new Set();
-  function addPrewarmer(fn) {
-    if (typeof fn === 'function') prewarmers.add(fn);
-  }
-  function runPrewarmers() {
-    setTimeout(() => {
-      prewarmers.forEach(fn => { try { fn(); } catch (e) {} });
-    }, 400);
+    return { voice: GLOBAL.voice, rate: GLOBAL.rate, pitch: GLOBAL.pitch };
   }
 
-  function setSettings(patch) {
-    const before = getSettings();
-    const s = Object.assign(before, patch || {});
-    localStorage.setItem('hh_voice', JSON.stringify(s));
-    /* 声音参数变化 → 缓存键全变 → 触发各页重新预热 */
-    if (s.voice !== before.voice || s.rate !== before.rate || s.pitch !== before.pitch) {
-      runPrewarmers();
+  /* ================= 标准拼音标注表（63 个，绝不把单个字母发给 TTS） =================
+     声母＝呼读音标准标注（bō/pō…），韵母＝第一声标准标注（ā/āi/uī…），
+     整体认读＝音节标注（zhī/yì…）。 */
+  const SYLLABLES = {
+    b: 'bō', p: 'pō', m: 'mō', f: 'fó', d: 'dé', t: 'tè', n: 'nè', l: 'lè',
+    g: 'gē', k: 'kē', h: 'hē', j: 'jī', q: 'qī', x: 'xī',
+    zh: 'zhī', ch: 'chī', sh: 'shī', r: 'rì', z: 'zī', c: 'cī', s: 'sī',
+    y: 'yī', w: 'wū',
+    a: 'ā', o: 'ō', e: 'ē', i: 'ī', u: 'ū', ü: 'yū',
+    ai: 'āi', ei: 'ēi', ui: 'uī', ao: 'āo', ou: 'ōu', iu: 'iū',
+    ie: 'iē', üe: 'yuē', er: 'ēr',
+    an: 'ān', en: 'ēn', in: 'īn', un: 'ūn', ün: 'yūn',
+    ang: 'āng', eng: 'ēng', ing: 'īng', ong: 'ōng',
+    zhi: 'zhī', chi: 'chī', shi: 'shī', ri: 'rì', zi: 'zī', ci: 'cì', si: 'sì',
+    yi: 'yī', wu: 'wǔ', yu: 'yú', ye: 'yè', yue: 'yuè', yuan: 'yuán',
+    yin: 'yīn', yun: 'yún', ying: 'yīng'
+  };
+  function syllableOf(p) { return SYLLABLES[p] || p; }
+
+  /* ---- 官方标准录音包接入位（人教社/国家中小学智慧教育平台等官方出品） ----
+     把官方下载的拼音录音按「拼音标注.mp3」命名（如 bō.mp3、zhī.mp3）放入
+     assets/pinyin-audio/，即自动优先播放官方录音；目录为空时使用 TTS 合成。
+     官方资源需在官方平台登录后下载，软件不做自动抓取。 */
+  const OFFICIAL_DIR = 'assets/pinyin-audio';
+
+  /* ---- 拼音语音库：IndexedDB 持久化（blob），启动全量加载进内存 ----
+     命中后点击零网络请求。库存键＝标准拼音标注。 */
+  const BANK_DB = 'hh_tts', BANK_STORE = 'syllables';
+  let bankDbp = null;
+  function bankOpen() {
+    if (bankDbp) return bankDbp;
+    bankDbp = new Promise((res, rej) => {
+      const rq = indexedDB.open(BANK_DB, 1);
+      rq.onupgradeneeded = e => {
+        const db = e.target.result;
+        if (!db.objectStoreNames.contains(BANK_STORE)) db.createObjectStore(BANK_STORE);
+      };
+      rq.onsuccess = () => res(rq.result);
+      rq.onerror = () => rej(rq.error);
+    });
+    return bankDbp;
+  }
+  async function bankPut(ann, blob) {
+    const db = await bankOpen();
+    return new Promise((res, rej) => {
+      const st = db.transaction(BANK_STORE, 'readwrite').objectStore(BANK_STORE);
+      st.put(blob, ann).onsuccess = () => res();
+      st.transaction.onerror = () => rej(st.transaction.error);
+    });
+  }
+  async function bankGet(ann) {
+    const db = await bankOpen();
+    return new Promise((res, rej) => {
+      const st = db.transaction(BANK_STORE, 'readonly').objectStore(BANK_STORE);
+      st.get(ann).onsuccess = () => res(st.result || null);
+      st.transaction.onerror = () => rej(st.transaction.error);
+    });
+  }
+
+  /* ---- 启动全量预加载：官方录音包优先 → 本地库存 → 云端合成（一次性） ---- */
+  let bankInFlight = false;
+  async function ensurePinyinBank() {
+    if (bankInFlight) return 0;
+    bankInFlight = true;
+    let filled = 0;
+    try {
+      /* 构建全部需要的标注：呼读音 + 四声变体（声母与 a 相拼） */
+      const FINAL_VOWEL = { 'üe': 'e', 'ai': 'a', 'ei': 'e', 'ui': 'i', 'ao': 'a', 'ou': 'o', 'iu': 'u',
+                            'ie': 'e', 'er': 'e', 'an': 'a', 'en': 'e', 'in': 'i', 'un': 'u',
+                            'ang': 'a', 'eng': 'e', 'ing': 'i', 'ong': 'o',
+                            'a': 'a', 'o': 'o', 'e': 'e', 'i': 'i', 'u': 'u' };
+      const SUFFIXES = Object.keys(FINAL_VOWEL).sort((x, y) => y.length - x.length);
+      const TONE_CHAR = { 'a': 'āáǎà', 'o': 'ōóǒò', 'e': 'ēéěè', 'i': 'īíǐì', 'u': 'ūúǔù' };
+      const addTone = (syl, tone) => {
+        for (const suf of SUFFIXES) {
+          if (syl.endsWith(suf)) {
+            const v = FINAL_VOWEL[suf];
+            return syl.slice(0, syl.length - suf.length) + suf.replace(v, TONE_CHAR[v][tone - 1]);
+          }
+        }
+        return syl;
+      };
+      const isShengmu = p => /^[bpmfdtnlgkhjqxzhchszywr]$/.test(p);
+      const wanted = [];
+      Object.keys(SYLLABLES).forEach(p => {
+        wanted.push(SYLLABLES[p]);
+        const base = isShengmu(p) ? p + 'a' : SYLLABLES[p];
+        for (let t = 1; t <= 4; t++) wanted.push(addTone(base, t));
+      });
+      const uniq = [...new Set(wanted)];
+
+      /* 先探测云端是否可用：限流/断网时本轮只装官方包与本地库存，
+         不逐条空等（避免一次预热拖几十分钟），90s 后自动重试 */
+      let cloudOk = true;
+      try {
+        await fetchOnce('预', GLOBAL.rate, GLOBAL.pitch, 0, 8000);
+      } catch (e) { cloudOk = false; }
+
+      for (const ann of uniq) {
+        const key = keyFor(ann, GLOBAL.rate, GLOBAL.pitch);
+        if (mem.has(key)) { filled++; continue; }
+        /* ① 官方录音包 */
+        try {
+          const r = await fetch(OFFICIAL_DIR + '/' + encodeURIComponent(ann) + '.mp3');
+          if (r.ok) {
+            const blob = await r.blob();
+            await bankPut(ann, blob);
+            mem.set(key, URL.createObjectURL(blob));
+            filled++; continue;
+          }
+        } catch (e) {}
+        /* ② 本地库存（上次已下载） */
+        try {
+          const blob = await bankGet(ann);
+          if (blob) {
+            mem.set(key, URL.createObjectURL(blob));
+            filled++; continue;
+          }
+        } catch (e) {}
+        /* ③ 云端合成 → 存入本地库存 */
+        if (!cloudOk) { setFailAt(Date.now()); continue; }
+        try {
+          const blob = await fetchOnce(ann, GLOBAL.rate, GLOBAL.pitch, 0, 8000);
+          await bankPut(ann, blob);
+          mem.set(key, URL.createObjectURL(blob));
+          filled++;
+        } catch (e) { setFailAt(Date.now()); }
+      }
+      /* 没铺满：90s 后自动补一轮（直到全量进库） */
+      if (filled < uniq.length) {
+        setTimeout(() => { bankInFlight = false; ensurePinyinBank(); }, 90000);
+        return filled;
+      }
+    } finally {
+      bankInFlight = false;
     }
-    return s;
+    return filled;
+  }
+
+  /* ---- 单次合成请求（供语音库/重试链使用） ---- */
+  function fetchOnce(text, rate, pitch, prio, timeoutMs) {
+    const ctrl = new AbortController();
+    const timer = setTimeout(() => ctrl.abort(), timeoutMs);
+    return fetch(TTS_BASE + '/tts', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ text: text, voice: GLOBAL.voice, rate: rate, pitch: pitch, prio: prio || 0 }),
+      signal: ctrl.signal
+    }).then(res => {
+      clearTimeout(timer);
+      if (!res.ok) throw new Error('tts-http-' + res.status);
+      return res.blob();
+    });
   }
 
   /* ---- 服务可用性探测（结果缓存 30s，失败自动降级） ---- */
@@ -241,8 +355,25 @@ window.HHTTS = (function () {
      · 未缓存但服务健康   → 服务器合成（点击插队，最长 4.5s）
      · 服务限流/故障期    → 立即用本机备用声音即时播报（90s 失败记忆期），
        同时后台继续补拉高质量音频，恢复后自动升级音质 */
+  /* 本机离线备用声（浏览器 speechSynthesis，中文）：保证任何情况都有声音 */
+  function browserSpeak(text, opt) {
+    if (!('speechSynthesis' in window) || !text) return;
+    speechSynthesis.cancel();
+    const u = new SpeechSynthesisUtterance(String(text));
+    u.lang = 'zh-CN';
+    u.rate = 0.95;
+    u.pitch = 1.05;
+    if (opt && opt.onstart) u.onstart = opt.onstart;
+    if (opt && opt.onend) u.onend = opt.onend;
+    speechSynthesis.speak(u);
+  }
+
   function speak(text, opt, fallback) {
     opt = opt || {};
+    /* 统一发音人：忽略外部传入的音色差异，永远使用全局唯一发音人 */
+    opt = Object.assign({}, opt, { voiceId: GLOBAL.voice });
+    /* 失败兜底：未传 fallback（如经 common.js 转发）时用本机备用声 */
+    if (typeof fallback !== 'function') fallback = browserSpeak;
     const my = ++seq;
     if (curAbort) { try { curAbort.abort(); } catch (e) {} curAbort = null; }
     if (curAudio) { curAudio.pause(); curAudio = null; }
@@ -294,7 +425,10 @@ window.HHTTS = (function () {
 
   /* 对外接口 */
   return { speak: speak, stop: stop, ping: ping, prewarm: prewarm, unlockAudio: unlockAudio,
-           pinyinVoiceId: pinyinVoiceId, addPrewarmer: addPrewarmer,
-           getSettings: getSettings, setSettings: setSettings,
-           VOICES: VOICES, RATES: RATES, PITCHES: PITCHES, DEF: DEF };
+           pinyinVoiceId: pinyinVoiceId,
+           getSettings: getSettings,
+           ensurePinyinBank: ensurePinyinBank, syllableOf: syllableOf,
+           VOICES: VOICES, RATES: RATES, PITCHES: PITCHES, DEF: DEF, GLOBAL: GLOBAL };
 })();
+/* 全局统一工具类别名：所有页面通过 window.AudioManager 调用语音 */
+window.AudioManager = window.HHTTS;

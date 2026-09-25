@@ -1,7 +1,7 @@
 /* ============================================================
-   语音设置弹窗 · voice.js（需求二）
-   小学生友好的大图标设置面板：音色卡片（带试听）/ 语速三档 / 音调三档。
-   设置即点即存（hh_voice），全局朗读立即生效。
+   语音设置弹窗 · voice.js（统一发音人版）
+   发音人/语速/音调已全局固定为小艺姐姐（tts.js GLOBAL 全局配置），
+   本面板仅提供：统一发音人信息 / 试听 / 服务状态。
    入口：家长端「设置」卡中的「语音设置」按钮（HHVoice.open()）。
    ============================================================ */
 window.HHVoice = (function () {
@@ -10,7 +10,6 @@ window.HHVoice = (function () {
 
   let box = null;      /* 弹窗 DOM（懒创建） */
 
-  /* ---- 构建弹窗骨架（只创建一次） ---- */
   function build() {
     if (box) return box;
     box = document.createElement('div');
@@ -20,81 +19,38 @@ window.HHVoice = (function () {
       '<div class="voice-card">' +
       '  <button class="voice-close pressable" data-act="close">✕</button>' +
       '  <p class="voice-title">语音伙伴</p>' +
-      '  <p class="voice-sub">选一个你喜欢的小星球声音吧！</p>' +
+      '  <p class="voice-sub">全软件使用同一个温柔的声音，宝贝听起来更稳定！</p>' +
       '  <div class="voice-list" id="vvVoices"></div>' +
-      '  <p class="voice-sec">说话速度</p>  <div class="seg-row" id="vvRates"></div>' +
-      '  <p class="voice-sec">声音高低</p>  <div class="seg-row" id="vvPitches"></div>' +
       '  <div class="voice-status" id="vvStatus">检查语音服务…</div>' +
       '</div>';
     document.body.appendChild(box);
 
-    /* 遮罩 / 关闭按钮 */
     box.querySelector('.voice-mask').addEventListener('click', close);
     box.querySelector('[data-act="close"]').addEventListener('click', close);
 
-    /* 音色卡片：大头像 + 名字 + 试听 */
+    /* 统一发音人卡片（唯一，试听走 AudioManager 统一参数） */
     const list = box.querySelector('#vvVoices');
-    HHTTS.VOICES.forEach(v => {
-      const card = document.createElement('button');
-      card.className = 'voice-opt pressable';
-      card.dataset.voice = v.id;
-      card.innerHTML =
-        '<span class="vo-avatar">' + v.emoji + '</span>' +
-        '<span class="vo-info"><b>' + v.name + '</b><i>' + v.desc + '</i></span>' +
-        '<span class="vo-try"><span class="ico" data-ico="speaker"></span>试听</span>';
-      /* 点卡片＝选它；点试听＝用这个音色播示例句 */
-      card.addEventListener('click', e => {
-        const isTry = e.target.closest('.vo-try');
-        HHTTS.setSettings({ voice: v.id });
-        paint();
-        sfx.tap();
-        if (isTry) HHTTS.speak('你好呀，我是你的学习伙伴！', { voiceId: v.id });
-      });
-      list.appendChild(card);
+    const card = document.createElement('button');
+    card.className = 'voice-opt pressable on';
+    card.innerHTML =
+      '<span class="vo-avatar">👧</span>' +
+      '<span class="vo-info"><b>小艺姐姐</b><i>统一发音人 · 活泼女声</i></span>' +
+      '<span class="vo-try"><span class="ico" data-ico="speaker"></span>试听</span>';
+    card.addEventListener('click', () => {
+      sfx.tap();
+      HH.speak('你好呀，我是你的学习伙伴！');
     });
-
-    /* 语速 / 音调 三档按钮 */
-    function buildSeg(boxId, items, key) {
-      const seg = box.querySelector('#' + boxId);
-      items.forEach(it => {
-        const b = document.createElement('button');
-        b.className = 'seg pressable';
-        b.textContent = it.name;
-        b.dataset.v = it.v;
-        b.addEventListener('click', () => {
-          HHTTS.setSettings({ [key]: it.v });
-          paint();
-          sfx.tap();
-        });
-        seg.appendChild(b);
-      });
-    }
-    buildSeg('vvRates', HHTTS.RATES, 'rate');
-    buildSeg('vvPitches', HHTTS.PITCHES, 'pitch');
+    list.appendChild(card);
 
     HH.injectIcons(box);
     return box;
-  }
-
-  /* ---- 按当前设置刷新选中态 ---- */
-  function paint() {
-    const s = HHTTS.getSettings();
-    box.querySelectorAll('.voice-opt').forEach(c => {
-      c.classList.toggle('on', c.dataset.voice === s.voice);
-    });
-    box.querySelectorAll('#vvRates .seg').forEach(b => {
-      b.classList.toggle('on', +b.dataset.v === s.rate);
-    });
-    box.querySelectorAll('#vvPitches .seg').forEach(b => {
-      b.classList.toggle('on', +b.dataset.v === s.pitch);
-    });
   }
 
   /* ---- 服务状态：已连接 / 未连接（未连接时朗读自动用备用声音） ---- */
   async function paintStatus() {
     const el = box.querySelector('#vvStatus');
     el.textContent = '检查语音服务…';
-    const ok = await HHTTS.ping();
+    const ok = await AudioManager.ping();
     el.textContent = ok ? '✅ 语音服务已连接' : '⚠ 语音服务未连接，请在电脑上运行 tts_server.py（已改用备用声音）';
     el.classList.toggle('bad', !ok);
   }
@@ -102,18 +58,15 @@ window.HHVoice = (function () {
   function open() {
     build();
     box.classList.remove('hidden');
-    paint();
     paintStatus();
-    /* 预热全部音色的试听句：点任何「试听」都秒播 */
-    if (window.HHTTS && window.HHTTS.prewarm) {
-      HHTTS.VOICES.forEach(v => {
-        window.HHTTS.prewarm(['你好呀，我是你的学习伙伴！'], { voiceId: v.id });
-      });
+    /* 预热试听句，点「试听」秒播 */
+    if (window.AudioManager && AudioManager.prewarm) {
+      AudioManager.prewarm(['你好呀，我是你的学习伙伴！']);
     }
   }
   function close() {
     if (box) box.classList.add('hidden');
-    HHTTS.stop();
+    HH.stopSpeak();
   }
 
   return { open: open, close: close };

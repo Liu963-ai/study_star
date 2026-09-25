@@ -243,14 +243,13 @@ window.HH = (function () {
     });
   }
 
-  /* ---------- 语音可用性：首次点击解锁音频（自动播放策略）+ 预热 ---------- */
+  /* ---------- 语音可用性：首次点击解锁音频（自动播放策略）+ 预热 + 拼音语音库 ---------- */
   function setupAudio() {
     /* 1) 首次任意点击：解锁音频（Chrome 在用户交互前会拒绝网页播放声音），
           并把排队中的自动播报补播出来 */
     const unlock = () => { if (window.HHTTS && window.HHTTS.unlockAudio) window.HHTTS.unlockAudio(); };
     document.addEventListener('pointerdown', unlock, { once: true, capture: true });
-    /* 2) 预热本页所有 [data-say] 点击文案：孩子点击图标时秒播。
-       注册为可重入函数——换音色/语速后由 HHTTS 自动重新预热 */
+    /* 2) 预热本页所有 [data-say] 点击文案：孩子点击图标时秒播 */
     const prewarmDataSay = () => {
       if (!window.HHTTS || !window.HHTTS.prewarm) return;
       const texts = [...new Set(
@@ -258,8 +257,12 @@ window.HH = (function () {
       )];
       if (texts.length) window.HHTTS.prewarm(texts);
     };
-    if (window.HHTTS && window.HHTTS.addPrewarmer) window.HHTTS.addPrewarmer(prewarmDataSay);
     setTimeout(prewarmDataSay, 600);
+    /* 3) 拼音语音库全量预加载：官方录音包优先 → 本地库存 → 云端，
+          加载进内存后点击零网络请求 */
+    if (window.HHTTS && window.HHTTS.ensurePinyinBank) {
+      setTimeout(() => window.HHTTS.ensurePinyinBank(), 900);
+    }
   }
 
   /* ================= 通用绑定 ================= */

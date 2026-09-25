@@ -11,7 +11,7 @@
        任一代码文件变更时由版本号 VER 触发旧缓存整体清理）
    · 跨域请求（127.0.0.1:7860 的 TTS/LLM）→ 不拦截，直接放行网络
    ============================================================ */
-const VER = 'hh-v14';  /* v13 优先级调度；v14 限流期即时备用通道（90s 失败记忆，任何按键立即出声） */
+const VER = 'hh-v16';  /* v14 限流即时反馈；v16 统一发音人(小艺)+拼音标准标注+语音库持久化+官方录音包接入+首页小树优化 */
 const CORE = [
   'index.html', 'home.html', 'ditu.html', 'pinyin.html', 'shengzi.html',
   'langdu.html', 'jushi.html', 'jiangli.html', 'jiesuan.html',

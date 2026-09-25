@@ -22,7 +22,10 @@
 
   <main class="home-main">
 
-    <!-- 语音问候气泡（600ms 后自动播报「你好，小星！」） -->
+    <!-- 昼夜氛围层：随系统时间切换晨/昼/黄昏/夜晚色调（纯装饰，不挡点击） -->
+    <div class="sky-tint" id="skyTint" aria-hidden="true"></div>
+
+    <!-- 语音问候气泡（纯视觉，不自动播报语音） -->
     <div class="greet" id="greet">
       <span class="ico greet-ico" data-ico="speaker"></span><span>你好，小星！</span>
     </div>
@@ -30,7 +33,14 @@
     <!-- 中央成长树主视觉：TreeMotion 挂载，约占屏 35%，不可被挤占 -->
     <div class="tree-wrap">
       <div class="tree" id="tree"></div>
+      <!-- 商店兑换的装饰（小树叶/小红花/甜果子/小草帽）挂在树上 -->
+      <div class="tree-deco" id="treeDeco" aria-hidden="true"></div>
+      <!-- 夜晚萤火虫（仅夜间出现） -->
+      <div class="fireflies" aria-hidden="true"></div>
     </div>
+
+    <!-- 成果统计：学过的字/拼音/朗读进度挂在小树下面 -->
+    <div class="tree-stats" id="treeStats" aria-label="学习成果"></div>
 
     <!-- 今日小任务：4 张横向任务卡（拼音/生字/朗读/词语） -->
     <p class="tasks-title">今天的小任务</p>

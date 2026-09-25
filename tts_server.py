@@ -51,16 +51,18 @@ def _coeffs_peaking(fc, fs, q=1.0, gain_db=4.0):
 
 
 def enhance_file(path):
-    """对已落盘的 mp3 做音质增强：高通 80Hz 去浑浊，3kHz 提升 4dB 让辅音
-    更清晰，响度归一 RMS -16dBFS（峰值限幅 -1dBFS）。失败保留原样。"""
+    """对已落盘的 mp3 做音质增强：高通 80Hz 去浑浊，3.2kHz 提升 5dB 让辅音
+    更清晰，6.3kHz 提升 2dB 增加明亮空气感（更接近真人录音），
+    响度归一 RMS -15dBFS（峰值限幅 -1dBFS）。失败保留原样。"""
     try:
         x, sr = sf.read(path, dtype="float64")
         if x.ndim > 1:
             x = x.mean(axis=1)
         hp = _biquad(x, *_coeffs_highpass(80.0, sr))
-        pk = _biquad(hp, *_coeffs_peaking(3000.0, sr, 1.0, 4.0))
+        pk = _biquad(_biquad(hp, *_coeffs_peaking(3200.0, sr, 0.9, 5.0)),
+                     *_coeffs_peaking(6300.0, sr, 1.2, 2.0))
         rms = np.sqrt(np.mean(pk ** 2)) + 1e-9
-        gain = min((10 ** (-16 / 20)) / rms,
+        gain = min((10 ** (-15 / 20)) / rms,
                    (10 ** (-1 / 20)) / (np.max(np.abs(pk)) + 1e-9))
         # 写无损 WAV（本机服务，避免 mp3 二次有损编码）
         sf.write(path, (pk * gain).astype("float32"), sr, format="WAV", subtype="PCM_16")

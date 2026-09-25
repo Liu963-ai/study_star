@@ -93,31 +93,61 @@
     hwBox.classList.remove('hidden');
     hwBox.innerHTML = '';
     svgCtx.anim = null;
+    fetchStrokeData(ch, 0);
+  }
+
+  /* ---- 笔顺数据加载：失败自动重试 + 本地缓存兜底 ----
+     服务未启动/网络抖动时曾直接停在「数据异常」，笔画永远出不来。
+     现在：优先用本机缓存（成功加载过的字离线也能写）；
+     无缓存则每 3s 自动重试，恢复后立即演示。 */
+  function fetchStrokeData(ch, attempt) {
+    /* 若已切到别的字，放弃本次加载 */
+    if (ITEMS[ci].char !== ch) return;
+    const cached = localStorage.getItem('hh_stroke_' + ch);
+    if (cached) {
+      try {
+        renderWriter(ch, JSON.parse(cached));
+        return;
+      } catch (e) { localStorage.removeItem('hh_stroke_' + ch); }
+    }
     fetch('assets/hanzi-data/' + encodeURIComponent(ch) + '.json')
-      .then(r => r.json())
-      .then(data => {
-        hwCtx.writer = HanziWriter.create(hwBox, ch, {
-          width: 380, height: 380, padding: 12,
-          strokeAnimationSpeed: 1, delayBetweenStrokes: 750,
-          strokeColor: '#33691E',
-          charDataLoader: function (c, onload) { onload(data); },
-          onStrokeAnimationComplete: function (ev) {
-            hwCtx.idx = Math.max(hwCtx.idx, ev.strokeNum + 1);
-            hwDots(ev.strokeNum);
-            speak('第' + (ev.strokeNum + 1) + '笔');
-          },
-          onComplete: function () {
-            charLearned(ch);                     /* 播完记为已学 */
-          }
-        });
-        hwCtx.total = data.strokes.length;
-        $('strokeTotal').textContent = hwCtx.total;
-        hwDots(0);
-        hwCtx.writer.animateCharacter();         /* 首次自动演示整字笔顺 */
+      .then(r => {
+        if (!r.ok) throw new Error('http-' + r.status);
+        return r.json();
       })
-      .catch(err => {
-        $('strokeSay').textContent = '笔顺数据异常：' + (err && err.message || err);
+      .then(data => {
+        try { localStorage.setItem('hh_stroke_' + ch, JSON.stringify(data)); } catch (e) {}
+        renderWriter(ch, data);
+      })
+      .catch(() => {
+        if (ITEMS[ci].char !== ch) return;      /* 已切字：不再提示 */
+        $('strokeSay').textContent = '笔顺数据取不到，正在自动重试…';
+        $('strokeTotal').textContent = '…';
+        setTimeout(() => fetchStrokeData(ch, attempt + 1), 3000);
       });
+  }
+
+  function renderWriter(ch, data) {
+    if (ITEMS[ci].char !== ch) return;          /* 已切字：放弃渲染 */
+    $('strokeSay').textContent = ch + '，看老师写一遍';
+    hwCtx.writer = HanziWriter.create(hwBox, ch, {
+      width: 380, height: 380, padding: 12,
+      strokeAnimationSpeed: 1, delayBetweenStrokes: 750,
+      strokeColor: '#33691E',
+      charDataLoader: function (c, onload) { onload(data); },
+      onStrokeAnimationComplete: function (ev) {
+        hwCtx.idx = Math.max(hwCtx.idx, ev.strokeNum + 1);
+        hwDots(ev.strokeNum);
+        speak('第' + (ev.strokeNum + 1) + '笔');
+      },
+      onComplete: function () {
+        charLearned(ch);                     /* 播完记为已学 */
+      }
+    });
+    hwCtx.total = data.strokes.length;
+    $('strokeTotal').textContent = hwCtx.total;
+    hwDots(0);
+    hwCtx.writer.animateCharacter();         /* 首次自动演示整字笔顺 */
   }
   function hwDots(doneIdx) {
     [...$('strokeDots').children].forEach((d, i) => d.classList.toggle('full', i < doneIdx + 1));

@@ -6,7 +6,7 @@
    ============================================================ */
 (function () {
   'use strict';
-  const { speak, gotoSettle, reduceMotion, toast } = window.HH;
+  const { speak, sfx, gotoSettle, reduceMotion, toast } = window.HH;
   const $ = id => document.getElementById(id);
   const poemCard = $('poemCard');
   const recWave = $('recWave');
@@ -156,6 +156,26 @@
   });
   btnTap.addEventListener('click', () => { tapMode = !tapMode; btnTap.classList.toggle('on', tapMode); });
   btnLoop.addEventListener('click', () => { loopMode = !loopMode; btnLoop.classList.toggle('on', loopMode); });
+
+  /* ---- 下一句：手动推进；本篇末句则翻到下一篇第一句 ---- */
+  const btnNextLine = $('btnNextLine');
+  btnNextLine.addEventListener('click', () => {
+    sfx.tap();
+    stopWave();
+    const t = TEXTS[textIdx];
+    if (sentIdx < t.segs.length - 1) {
+      sentIdx++;
+      render();
+      playSentence();
+    } else {
+      /* 已是本篇最后一句：切下一篇（回到其第一句并朗读） */
+      textIdx = (textIdx + 1) % TEXTS.length;
+      sentIdx = 0;
+      render();
+      playSentence();
+      speak(TEXTS[textIdx].title ? '下一篇，' + TEXTS[textIdx].title : '');
+    }
+  });
 
   /* ---- 课文切换：‹ 上一篇 / 下一篇 ›（回到该篇第一句） ---- */
   function switchText(delta) {

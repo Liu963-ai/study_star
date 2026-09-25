@@ -359,16 +359,6 @@
     btn.addEventListener('pointercancel', pressEnd);
   });
 
-  /* ---- 全页预热：当前内容优先，其次整组呼读音；
-     注册到 HHTTS，换音色/语速后自动重新预热 ---- */
-  function prewarmAll() {
-    prewarmCurrent();
-    prewarmGroup();
-  }
-  if (window.HHTTS && window.HHTTS.addPrewarmer) {
-    window.HHTTS.addPrewarmer(prewarmAll);
-  }
-
   /* ---- 进入页面：先引导，再读当前拼音（呼读音） ---- */
   paint();
   setTimeout(() => {

@@ -15,3 +15,9 @@ probe_tts.mp3
 # 生字数据抽取中间件
 _shengzi.json
 _shengzi_data.txt
+
+# ---------- 运行时不加载的资源（文件保留在本地磁盘，不入版本管理） ----------
+# 成长树的 6 张切层源图（运行只用 assets/tree-motion/stages/，src 仅供重新切层）
+assets/tree-motion/src/
+# 词语乐园旧版场景插图 20 张（DATA.jushi[].img 字段当前无消费者，见 js/data.js 注释）
+assets/jushi/

@@ -332,17 +332,4 @@
 
   /* ---- 启动 ---- */
   loadChar();
-  /* 注册预热：换音色/语速后自动重新预热当前字 */
-  if (window.HHTTS && window.HHTTS.addPrewarmer) {
-    window.HHTTS.addPrewarmer(() => loadCharPrewarmOnly());
-  }
-  function loadCharPrewarmOnly() {
-    const it = ITEMS[ci];
-    if (!it || !(window.HHTTS && window.HHTTS.prewarm)) return;
-    const strokeTexts = (it.strokes || []).map((s, i) => '第' + (i + 1) + '笔，' + (s.name || ''));
-    const introOf = c => c.char + (c.pinyin ? '，' + c.pinyin : '') + '。看老师写一遍';
-    const nxt = ITEMS[(ci + 1) % ITEMS.length];
-    window.HHTTS.prewarm([introOf(it), introOf(nxt), it.char, nxt.char,
-      ...(it.words || []), ...strokeTexts]);
-  }
 })();

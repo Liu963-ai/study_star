@@ -1,10 +1,15 @@
 /* 汉字小星球 · 页面冒烟测试（只读运行，不修改项目文件）
    用系统 Edge + puppeteer-core 逐页加载，收集：
    1) JS 运行时错误 / 未捕获 Promise
-   2) 每页实际传输字节（验证首屏瘦身）
+   2) 每页实际传输字节（粗测，精确值见 measure_weight.js）
    3) DOM 里的 [object Object] / NaN / undefined 脏文本
-   4) 关键行为断言（星星记账锁、周星星、闯关选项、纪念品视频懒加载）
-   用法：node smoke.js http://127.0.0.1:8788/
+   4) 关键行为断言（星星记账锁、周星星、记录不跳页、闯关选项、视频按需加载）
+   用法：node smoke_test.js http://127.0.0.1:8788/
+
+   v18 调整：等待条件由 waitUntil:'load' 改为 'domcontentloaded' + 更短超时。
+   原版在本机 7860 语音服务同时运行时会被拖住——页面会真的发起 edge-tts 合成
+   请求，'load' 迟迟不触发，11 页串行曾跑 10 分钟不返回。JS 逻辑在
+   DOMContentLoaded 之前就已执行完，故该等待方式对"验证运行时错误"已足够。
 */
 const puppeteer = require('puppeteer-core');
 
@@ -13,10 +18,32 @@ const EDGE = 'C:\\Program Files (x86)\\Microsoft\\Edge\\Application\\msedge.exe'
 const PAGES = ['index.html', 'home.html', 'pinyin.html', 'shengzi.html', 'langdu.html',
   'jushi.html', 'ditu.html', 'jiangli.html', 'jiesuan.html', 'parent.html', 'jiaocai.html'];
 
+const NAV = { waitUntil: 'domcontentloaded', timeout: 12000 };
+const SETTLE = 1500;          /* DOMContentLoaded 后留出的异步渲染时间 */
+
 /* 本机 7860 语音服务未启动时的失败属预期，不计入问题 */
 const EXPECTED = /7860|tts|favicon|ERR_CONNECTION_REFUSED|Failed to fetch|net::ERR/i;
 
 const sleep = ms => new Promise(r => setTimeout(r, ms));
+
+/* 屏蔽本机语音服务（7860）。
+   测试不需要真实音频；而页面开着 7860 时会批量预加载语音（拼音页约 273 条语音库），
+   大量 pending 请求会把 headless 浏览器拖垮——原版 11 页跑 10 分钟不返回，根因即此。
+   屏蔽后 JS 走既有的降级分支（speechSynthesis / 静默），不影响运行时错误检测。 */
+async function harden(page) {
+  await page.setRequestInterception(true);
+  page.on('request', r => {
+    if (r.url().includes(':7860')) { r.abort(); } else { r.continue(); }
+  });
+}
+
+/* 全局兜底：无论卡在哪一步都保证退出并给出可诊断信息（unref 使其不阻止正常退出） */
+const HARD_MS = 150000;
+const hard = setTimeout(() => {
+  console.error('SMOKE HARD TIMEOUT after ' + HARD_MS + 'ms');
+  process.exit(2);
+}, HARD_MS);
+if (hard.unref) hard.unref();
 
 (async () => {
   const browser = await puppeteer.launch({
@@ -29,12 +56,13 @@ const sleep = ms => new Promise(r => setTimeout(r, ms));
   for (const p of PAGES) {
     const page = await browser.newPage();
     await page.setViewport({ width: 390, height: 844, deviceScaleFactor: 2 });
+    await harden(page);
     const errors = [];
     let bytes = 0;
     const big = [];
     page.on('pageerror', e => errors.push('pageerror: ' + (e && e.message ? e.message : String(e))));
     page.on('console', m => { if (m.type() === 'error') errors.push('console: ' + m.text()); });
-    page.on('response', async r => {
+    page.on('response', r => {
       try {
         const len = Number(r.headers()['content-length'] || 0);
         bytes += len;
@@ -42,8 +70,8 @@ const sleep = ms => new Promise(r => setTimeout(r, ms));
       } catch (e) {}
     });
     try {
-      await page.goto(BASE + p, { waitUntil: 'load', timeout: 25000 });
-      await sleep(3000);
+      await page.goto(BASE + p, NAV);
+      await sleep(SETTLE);
     } catch (e) { errors.push('NAV: ' + e.message); }
 
     let dom = {};
@@ -78,8 +106,9 @@ const sleep = ms => new Promise(r => setTimeout(r, ms));
 
   /* ---------- 行为断言（在 home.html 的干净上下文里跑） ---------- */
   const page = await browser.newPage();
-  await page.goto(BASE + 'home.html', { waitUntil: 'load' });
-  await sleep(600);
+  await harden(page);
+  await page.goto(BASE + 'home.html', NAV);
+  await sleep(800);
   const behavior = await page.evaluate(async () => {
     const out = {};
     Object.keys(localStorage).filter(k => k.startsWith('hh_')).forEach(k => localStorage.removeItem(k));
@@ -115,9 +144,10 @@ const sleep = ms => new Promise(r => setTimeout(r, ms));
 
   /* ---------- 闯关「听音选声母」选项渲染（第 2 关固定为该题型） ---------- */
   const page2 = await browser.newPage();
-  await page2.goto(BASE + 'ditu.html', { waitUntil: 'load' });
+  await harden(page2);
+  await page2.goto(BASE + 'ditu.html', NAV);
   await page2.evaluate(() => localStorage.setItem('hh_mapLevel', '2'));
-  await page2.reload({ waitUntil: 'load' });
+  await page2.reload(NAV);
   await sleep(1200);
   const quest = await page2.evaluate(async () => {
     const nodes = [...document.querySelectorAll('.node')];
@@ -135,6 +165,7 @@ const sleep = ms => new Promise(r => setTimeout(r, ms));
   await page.close();
   await page2.close();
   await browser.close();
+  clearTimeout(hard);
 
   console.log(JSON.stringify({ pages: results, behavior, quest }, null, 1));
 })().catch(e => { console.error('SMOKE FAILED:', e); process.exit(1); });

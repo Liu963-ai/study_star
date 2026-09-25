@@ -7,16 +7,22 @@ tts_server.py —— 本地语音合成服务（edge-tts → mp3，带磁盘缓�
   GET  /ping  → {"ok":true,"voices":{...}}          健康检查
   POST /tts   → body: {"text","voice","rate","pitch"}（JSON）
                 返回 audio/mpeg（相同内容命中磁盘缓存，不重复合成）
+  POST /llm   → 代理转发智谱 LLM（仅限环回地址调用）
 缓存：以 (text + voice + rate + pitch) 的 sha1 哈希为文件名，存 tts_cache/。
-运行：python tts_server.py   （监听 127.0.0.1:7860，仅本机可访问）
+运行：python tts_server.py
+  监听 0.0.0.0:7860 —— 本机与同一局域网内的手机/平板均可访问；
+  /tts 与 /ping 对局域网开放（CORS 只放行本机与私网来源，见 _origin_allowed），
+  /llm 代理携带 API Key，仅允许环回地址调用。
 """
 import asyncio
 import hashlib
 import heapq
+import ipaddress
 import json
 import re
 import threading
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+from urllib.parse import urlparse
 
 import edge_tts
 import numpy as np
@@ -162,14 +168,52 @@ def synth_to_file(text, voice, rate, pitch, path):
     enhance_file(path)
 
 
+def _origin_allowed(origin):
+    """判断请求来源是否可放行。
+
+    本服务监听 0.0.0.0，局域网设备要能调用 /tts，所以不能一刀切拒绝跨域；
+    但也不能回显 "*"——否则用户浏览任意公网网页时，该网页可静默调用本机
+    合成服务（消耗 edge-tts 配额、写满磁盘缓存）。故按来源做白名单：
+      · 无 Origin（同源请求、curl 等非浏览器客户端）→ 放行
+      · "null"（file:// 打开的页面）→ 放行
+      · 主机为 localhost / 回环 / 私网 / 链路本地地址 → 放行
+      · 其余（包含任何公网域名）→ 拒绝
+    """
+    if not origin or origin == "null":
+        return True
+    try:
+        p = urlparse(origin)
+    except Exception:
+        return False
+    if p.scheme not in ("http", "https"):
+        return False
+    host = (p.hostname or "").lower()
+    if not host:
+        return False
+    if host == "localhost":
+        return True
+    try:
+        ip = ipaddress.ip_address(host)
+    except ValueError:
+        return False            # 域名一律不放行（本服务的合法来源只有 localhost 与 IP）
+    return ip.is_loopback or ip.is_private or ip.is_link_local
+
+
 class Handler(BaseHTTPRequestHandler):
-    """只提供 /ping 与 /tts 两个接口。"""
+    """只提供 /ping、/tts 与 /llm 三个接口。"""
+
+    # 连接超时：客户端建连后不发（或慢速发送）请求会占住一个线程，
+    # 默认无超时可被 slowloris 拖垮。正常请求远快于此值。
+    timeout = 30
 
     def _cors(self):
-        """页面端口与本服务端口不同源，需放行跨域（仅本机服务）。"""
-        self.send_header("Access-Control-Allow-Origin", "*")
-        self.send_header("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
-        self.send_header("Access-Control-Allow-Headers", "Content-Type")
+        """页面端口与本服务端口不同源，需放行跨域；按来源回显而非 "*"。"""
+        origin = self.headers.get("Origin", "")
+        if origin and _origin_allowed(origin):
+            self.send_header("Access-Control-Allow-Origin", origin)
+            self.send_header("Vary", "Origin")
+            self.send_header("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
+            self.send_header("Access-Control-Allow-Headers", "Content-Type")
 
     def _json(self, code, obj):
         body = json.dumps(obj, ensure_ascii=False).encode("utf-8")
@@ -279,6 +323,10 @@ class Handler(BaseHTTPRequestHandler):
             return
         if self.path != "/tts":
             self._json(404, {"ok": False})
+            return
+        # 跨域来源白名单：非白名单直接拒绝，避免被公网网页当免费合成代理
+        if not _origin_allowed(self.headers.get("Origin", "")):
+            self._json(403, {"ok": False, "msg": "origin not allowed"})
             return
         try:
             length = int(self.headers.get("Content-Length", 0))

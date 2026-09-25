@@ -6,12 +6,12 @@
    · 运行期：
      - 笔顺数据 assets/hanzi-data/（9575 个文件）→ 绝不全量预缓存，
        按「访问哪个字缓存哪个字」的 cache-first 策略惰性填充
-     - 吉祥物视频 assets/planets/（约 13MB）→ 同样按需缓存，不进预缓存
+     - 吉祥物视频 assets/planets/（约 1.7MB，v18 已重编码）→ 同样按需缓存，不进预缓存
      - 其余同源 GET → cache-first + 后台更新（避免"永远拿到旧版本"：
        任一代码文件变更时由版本号 VER 触发旧缓存整体清理）
    · 跨域请求（127.0.0.1:7860 的 TTS/LLM）→ 不拦截，直接放行网络
    ============================================================ */
-const VER = 'hh-v17';  /* v17 教育质量优化：首屏体积/WCAG对比度/学习记账/缺陷修复（详见 项目说明书.md §12） */
+const VER = 'hh-v18';  /* v18：吉祥物视频重编码（首屏 −65%）+ 死代码清理 + tts_server 加固（详见 项目说明书.md §13） */
 const CORE = [
   'index.html', 'home.html', 'ditu.html', 'pinyin.html', 'shengzi.html',
   'langdu.html', 'jushi.html', 'jiangli.html', 'jiesuan.html',

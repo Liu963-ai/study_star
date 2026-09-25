@@ -11,7 +11,7 @@
        任一代码文件变更时由版本号 VER 触发旧缓存整体清理）
    · 跨域请求（127.0.0.1:7860 的 TTS/LLM）→ 不拦截，直接放行网络
    ============================================================ */
-const VER = 'hh-v18';  /* v18：吉祥物视频重编码（首屏 −65%）+ 死代码清理 + tts_server 加固（详见 项目说明书.md §13） */
+const VER = 'hh-v19';  /* v19 拼音读音修复：语音库标调算法修正、降级通道保护（详见 项目说明书.md §14） */
 const CORE = [
   'index.html', 'home.html', 'ditu.html', 'pinyin.html', 'shengzi.html',
   'langdu.html', 'jushi.html', 'jiangli.html', 'jiesuan.html',

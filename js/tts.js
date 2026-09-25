@@ -58,6 +58,51 @@ window.HHTTS = (function () {
   };
   function syllableOf(p) { return SYLLABLES[p] || p; }
 
+  /* ================= 拼音标调（全站唯一实现） =================
+     教材规则：按最长后缀定位韵母，声调标在其主元音上（iu/ui 标在后一个
+     字母；ü 用 ǖǘǚǜ）。
+     这里必须只有一份实现：pinyin.js 的四声按钮与语音库预合成（见
+     pinyinBankList）都调用 addTone。历史上 tts.js 与 pinyin.js 各写了一份
+     且表项不一致——tts.js 缺 'ü'/'ün' 两项、声母判定又漏掉 zh/ch/sh，
+     导致语音库有 129 条与页面实际播放的标注对不上（占 41%），
+     其中 36 个拼音的四声在库里退化成「同一个标注重复 4 次」。 */
+  const FINAL_VOWEL = { 'üe': 'e', 'ai': 'a', 'ei': 'e', 'ui': 'i', 'ao': 'a', 'ou': 'o', 'iu': 'u',
+                        'ie': 'e', 'er': 'e', 'an': 'a', 'en': 'e', 'in': 'i', 'un': 'u', 'ün': 'ü',
+                        'ang': 'a', 'eng': 'e', 'ing': 'i', 'ong': 'o',
+                        'a': 'a', 'o': 'o', 'e': 'e', 'i': 'i', 'u': 'u', 'ü': 'ü' };
+  const SUFFIXES = Object.keys(FINAL_VOWEL).sort((x, y) => y.length - x.length);
+  const TONE_CHAR = { 'a': 'āáǎà', 'o': 'ōóǒò', 'e': 'ēéěè', 'i': 'īíǐì',
+                      'u': 'ūúǔù', 'ü': 'ǖǘǚǜ' };
+  function addTone(syl, tone) {
+    for (const suf of SUFFIXES) {
+      if (syl.endsWith(suf)) {
+        const vowel = FINAL_VOWEL[suf];
+        const voiced = TONE_CHAR[vowel][tone - 1];
+        return syl.slice(0, syl.length - suf.length) + suf.replace(vowel, voiced);
+      }
+    }
+    return syl;
+  }
+  /* 声母判定：必须覆盖 zh/ch/sh 双字母（旧正则 [bpmfdtnlgkhjqxzhchszywr]
+     是单字符集合，'zh' 长度 2 永远不匹配），同时不能把 zhi/chi/shi
+     等整体认读误判成声母——正则整体加 (?:…) 与 $ 锚定。 */
+  const SHENG_MU_RE = /^(?:zh|ch|sh|[bpmfdtnlgkhjqxrzcsyw])$/;
+  function isShengmuPinyin(p) { return SHENG_MU_RE.test(p); }
+  /* 四声练习的基础音节：声母与 a 相拼（b → bā bá bǎ bà），其余用拼音本体。
+     注意传进来的是无调形式（SYLLABLES 的键），不是 SYLLABLES 的值
+     ——旧代码把已带声调的 'ā'/'zhī' 再送进 addTone，找不到后缀就原样返回，
+     四声因此全部退化成第一声。 */
+  function toneBase(p) { return isShengmuPinyin(p) ? p + 'a' : p; }
+  /* 语音库应预合成的全部标注：呼读音 + 四声变体（供 ensurePinyinBank 与测试用） */
+  function pinyinBankList() {
+    const wanted = [];
+    Object.keys(SYLLABLES).forEach(p => {
+      wanted.push(SYLLABLES[p]);
+      for (let t = 1; t <= 4; t++) wanted.push(addTone(toneBase(p), t));
+    });
+    return [...new Set(wanted)];
+  }
+
   /* ---- 官方标准录音包接入位（人教社/国家中小学智慧教育平台等官方出品） ----
      把官方下载的拼音录音按「拼音标注.mp3」命名（如 bō.mp3、zhī.mp3）放入
      assets/pinyin-audio/，即自动优先播放官方录音；目录为空时使用 TTS 合成。
@@ -116,30 +161,8 @@ window.HHTTS = (function () {
     bankInFlight = true;
     let filled = 0;
     try {
-      /* 构建全部需要的标注：呼读音 + 四声变体（声母与 a 相拼） */
-      const FINAL_VOWEL = { 'üe': 'e', 'ai': 'a', 'ei': 'e', 'ui': 'i', 'ao': 'a', 'ou': 'o', 'iu': 'u',
-                            'ie': 'e', 'er': 'e', 'an': 'a', 'en': 'e', 'in': 'i', 'un': 'u',
-                            'ang': 'a', 'eng': 'e', 'ing': 'i', 'ong': 'o',
-                            'a': 'a', 'o': 'o', 'e': 'e', 'i': 'i', 'u': 'u' };
-      const SUFFIXES = Object.keys(FINAL_VOWEL).sort((x, y) => y.length - x.length);
-      const TONE_CHAR = { 'a': 'āáǎà', 'o': 'ōóǒò', 'e': 'ēéěè', 'i': 'īíǐì', 'u': 'ūúǔù' };
-      const addTone = (syl, tone) => {
-        for (const suf of SUFFIXES) {
-          if (syl.endsWith(suf)) {
-            const v = FINAL_VOWEL[suf];
-            return syl.slice(0, syl.length - suf.length) + suf.replace(v, TONE_CHAR[v][tone - 1]);
-          }
-        }
-        return syl;
-      };
-      const isShengmu = p => /^[bpmfdtnlgkhjqxzhchszywr]$/.test(p);
-      const wanted = [];
-      Object.keys(SYLLABLES).forEach(p => {
-        wanted.push(SYLLABLES[p]);
-        const base = isShengmu(p) ? p + 'a' : SYLLABLES[p];
-        for (let t = 1; t <= 4; t++) wanted.push(addTone(base, t));
-      });
-      const uniq = [...new Set(wanted)];
+      /* 全部需要的标注：呼读音 + 四声变体（标调算法与 pinyin.js 共用一份，见 addTone） */
+      const uniq = pinyinBankList();
 
       /* 先探测云端是否可用：限流/断网时本轮只装官方包与本地库存，
          不逐条空等（避免一次预热拖几十分钟），90s 后自动重试 */
@@ -250,6 +273,9 @@ window.HHTTS = (function () {
   function stop() {
     seq++;
     if (curAudio) { curAudio.pause(); curAudio = null; }
+    /* 降级通道此前不受 stop 管辖：新朗读顶替旧朗读时，系统语音会把上一句
+       念完再念新的，孩子会听到两个声音叠在一起。 */
+    try { if ('speechSynthesis' in window) speechSynthesis.cancel(); } catch (e) {}
   }
 
   /* 内存缓存淘汰：按条数控制长会话膨胀，但**绝不淘汰语音库条目**。
@@ -330,7 +356,11 @@ window.HHTTS = (function () {
     opt = opt || {};
     try { if (await ping() === false) return 0; } catch (e) { return 0; }
     const s = getSettings();
-    const voice = (opt.voiceId && VOICES.some(v => v.id === opt.voiceId)) ? opt.voiceId : s.voice;
+    /* 音色判定必须与 speak 完全一致，否则预热出的缓存键与播放时对不上，
+       「点击零网络请求」的语音库等于白建（历史上正是拼音预热用安全音色、
+       播放却用普通音色，导致拼音每次都要现场合成）。 */
+    const voice = opt.pinyinVoice ? pinyinVoiceId()
+      : (opt.voiceId && VOICES.some(v => v.id === opt.voiceId)) ? opt.voiceId : s.voice;
     const rate = effRate(s, opt);
     const list = [...new Set((texts || []).filter(Boolean).map(String))].slice(0, 40);
     let done = 0, i = 0;
@@ -372,11 +402,15 @@ window.HHTTS = (function () {
 
   /* ---- 拼音音节的专用音色 ----
      部分音色（如云扬播音腔）会把带调拼音 mā/ǎ 读成英文字母，
-     实测小霞/小艺/阳光会按中文音节朗读。拼音音节一律路由到安全音色。 */
+     实测小霞/小艺/阳光会按中文音节朗读。拼音音节一律路由到安全音色。
+     兜底必须是一个「确定安全」的音色：旧代码兜底到 DEF.voice，而 DEF.voice
+     就是全局音色本身——等于没兜底，一旦全局音色换成云扬，
+     pinyinVoiceId() 会原样返回不安全音色，拼音仍被读成英文字母。 */
   const PINYIN_SAFE = new Set(['zh-CN-XiaoxiaoNeural', 'zh-CN-XiaoyiNeural', 'zh-CN-YunxiNeural']);
+  const PINYIN_SAFE_DEFAULT = 'zh-CN-XiaoyiNeural';   /* 安全集成员，与全局音色解耦 */
   function pinyinVoiceId() {
     const s = getSettings();
-    return PINYIN_SAFE.has(s.voice) ? s.voice : DEF.voice;
+    return PINYIN_SAFE.has(s.voice) ? s.voice : PINYIN_SAFE_DEFAULT;
   }
 
   /* ---- 请求合成并播放；任何失败走 fallback（浏览器 TTS），不阻塞 ----
@@ -389,6 +423,18 @@ window.HHTTS = (function () {
   /* 本机离线备用声（浏览器 speechSynthesis，中文）：保证任何情况都有声音 */
   function browserSpeak(text, opt) {
     if (!('speechSynthesis' in window) || !text) return;
+    /* 系统里没有中文语音时不要硬读：其它语种的引擎会把汉字念成乱码或整句跳过。
+       实测无头环境 getVoices() 返回 0 个语音，此时 speak() 是静默的空操作。
+       首次调用 getVoices() 可能返回空数组（异步加载），为空则放行保持原行为。 */
+    try {
+      const vs = speechSynthesis.getVoices();
+      if (vs.length && !vs.some(v => /^zh/i.test(v.lang || ''))) {
+        /* 不出声，但必须补一次 onend：依赖它推进的流程（拼音连读、声波动画、
+           跟读引导）否则会永久卡住。 */
+        if (opt && typeof opt.onend === 'function') { try { opt.onend(); } catch (e) {} }
+        return;
+      }
+    } catch (e) {}
     speechSynthesis.cancel();
     const u = new SpeechSynthesisUtterance(String(text));
     u.lang = 'zh-CN';
@@ -399,12 +445,36 @@ window.HHTTS = (function () {
     speechSynthesis.speak(u);
   }
 
+  /* 拼音在降级通道下无法保证正确读音：宁可不出声，也不教错。
+     只在首次提示一次（提示面向家长，孩子看不懂文字），并补一次 onend
+     让调用链继续（连读、声波动画、跟读引导都依赖它）。 */
+  let pinyinWarned = false;
+  function pinyinNoFallback(opt) {
+    if (!pinyinWarned) {
+      pinyinWarned = true;
+      try {
+        if (window.HH && window.HH.toast) window.HH.toast('语音服务未连接，拼音示范暂时无法播放');
+      } catch (e) {}
+    }
+    if (opt && typeof opt.onend === 'function') { try { opt.onend(); } catch (e) {} }
+  }
+
   function speak(text, opt, fallback) {
     opt = opt || {};
-    /* 统一发音人：忽略外部传入的音色差异，永远使用全局唯一发音人 */
-    opt = Object.assign({}, opt, { voiceId: GLOBAL.voice });
+    /* 统一发音人：除拼音音节外，忽略外部传入的音色差异，永远使用全局唯一发音人。
+       拼音音节（opt.pinyinVoice）必须路由到能正确朗读音节的音色，见 pinyinVoiceId。 */
+    opt = Object.assign({}, opt, { voiceId: opt.pinyinVoice ? pinyinVoiceId() : GLOBAL.voice });
     /* 失败兜底：未传 fallback（如经 common.js 转发）时用本机备用声 */
     if (typeof fallback !== 'function') fallback = browserSpeak;
+    /* ---- 降级通道保护 ----
+       系统语音无法可靠还原带声调符号的拼音标注（bō/à/zhā）：中文引擎通常丢掉
+       声调，非中文引擎直接按英文字母读——两者都会教错。故拼音音节分两路降级：
+         · 有汉字替代文本（音卡：b → 玻）→ 读汉字，读音正确
+         · 无替代文本（四声 ā/á/ǎ/à 没有同音汉字）→ 静音 + 提示，不糊弄 */
+    const fbText = opt.fallbackText ? String(opt.fallbackText) : String(text);
+    const fb = (opt.pinyinVoice && !opt.fallbackText)
+      ? function (t, o) { pinyinNoFallback(o); }
+      : function (t, o) { return fallback(fbText, o); };
     const my = ++seq;
     if (curAudio) { curAudio.pause(); curAudio = null; }
 
@@ -417,7 +487,7 @@ window.HHTTS = (function () {
 
     /* 限流/故障期（90s 内有过失败，跨页面记忆）且未缓存：立即备用声音 */
     if (!cached && Date.now() - lastFailAt() < 90000) {
-      fallback(textS, opt);
+      fb(textS, opt);
       getUrl(textS, voice, rate, pitch, 0).then(() => markUp()).catch(() => {});   /* 后台补拉 */
       return { cancel: stop };
     }
@@ -432,7 +502,7 @@ window.HHTTS = (function () {
         curAudio = audio;
         audio.onplay = () => { if (my === seq && opt.onstart) opt.onstart(); };
         audio.onended = () => { if (my === seq && opt.onend) opt.onend(); };
-        audio.onerror = () => { if (my === seq) fallback(String(text), opt); };
+        audio.onerror = () => { if (my === seq) fb(String(text), opt); };
         try {
           await audio.play();
         } catch (playErr) {
@@ -447,7 +517,7 @@ window.HHTTS = (function () {
         if (my !== seq) return;
         if (String(e && e.name) === 'AbortError') return;
         if (String(e && e.message) !== 'tts-down') markDown();   /* 仅网络类失败才降级 30s */
-        fallback(String(text), opt);
+        fb(String(text), opt);
       }
     })();
     return { cancel: stop };
@@ -458,6 +528,8 @@ window.HHTTS = (function () {
            pinyinVoiceId: pinyinVoiceId,
            getSettings: getSettings,
            ensurePinyinBank: ensurePinyinBank, syllableOf: syllableOf,
+           /* 标调与语音库清单：与 pinyin.js 共用同一份实现，勿在别处另写一份 */
+           addTone: addTone, toneBase: toneBase, pinyinBankList: pinyinBankList,
            VOICES: VOICES, RATES: RATES, PITCHES: PITCHES, DEF: DEF, GLOBAL: GLOBAL };
 })();
 /* 全局统一工具类别名：所有页面通过 window.AudioManager 调用语音 */

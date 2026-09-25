@@ -3,13 +3,17 @@
    1) JS 运行时错误 / 未捕获 Promise
    2) 每页实际传输字节（粗测，精确值见 measure_weight.js）
    3) DOM 里的 [object Object] / NaN / undefined 脏文本
-   4) 关键行为断言（星星记账锁、周星星、记录不跳页、闯关选项、视频按需加载）
+   4) 关键行为断言（星星记账锁、周星星、记录不跳页、闯关选项、视频按需加载、
+      拼音语音库覆盖与四声不退化、降级通道读汉字/静音）
    用法：node smoke_test.js http://127.0.0.1:8788/
 
    v18 调整：等待条件由 waitUntil:'load' 改为 'domcontentloaded' + 更短超时。
    原版在本机 7860 语音服务同时运行时会被拖住——页面会真的发起 edge-tts 合成
    请求，'load' 迟迟不触发，11 页串行曾跑 10 分钟不返回。JS 逻辑在
    DOMContentLoaded 之前就已执行完，故该等待方式对"验证运行时错误"已足够。
+
+   v19 新增：拼音语音库覆盖断言与降级通道行为断言（hook speechSynthesis.speak
+   记录被朗读的文本）。凡拼音朗读都必须证明其读的是汉字或干脆不出声。
 */
 const puppeteer = require('puppeteer-core');
 
@@ -139,6 +143,33 @@ if (hard.unref) hard.unref();
     out.syllable_b = HHTTS.syllableOf('b');
     out.syllable_zh = HHTTS.syllableOf('zh');
 
+    /* 7) 语音库：条目数与关键标注（回归 v19 修复的四声退化缺陷） */
+    const bank = HHTTS.pinyinBankList();
+    out.bank = {
+      size: bank.length,
+      noDup: new Set(bank).size === bank.length,
+      hasZha1: bank.includes('zhā'),
+      hasA4: bank.includes('à'),
+      hasZhi4: bank.includes('zhì'),
+      hasU1: bank.includes('ǖ'),
+      hasUn1: bank.includes('ǖn'),
+      hasYue1: bank.includes('yuē')
+    };
+    /* 四声必须互不相同（历史上 36 个拼音的四声全部等于第一声） */
+    const spread = p => new Set([1, 2, 3, 4].map(t => HHTTS.addTone(HHTTS.toneBase(p), t))).size;
+    out.toneVariety = { a: spread('a'), zhi: spread('zhi'), zh: spread('zh'), u: spread('ü') };
+
+    /* 8) 降级通道保护：拼音标注绝不能交给系统语音读成拉丁串 */
+    const spoken = [];
+    const synth = window.speechSynthesis;
+    if (synth) synth.speak = u => spoken.push(u.text);
+    localStorage.setItem('hh_ttsFailAt', String(Date.now()));   /* 模拟语音服务不可用 */
+    HHTTS.speak('bō', { pinyinVoice: true, fallbackText: '玻' });   /* 音卡：应降级读汉字 */
+    HHTTS.speak('à', { pinyinVoice: true });                        /* 四声：无替代，应静音 */
+    await new Promise(r => setTimeout(r, 300));
+    out.fallbackSpoken = spoken.slice();
+    localStorage.removeItem('hh_ttsFailAt');
+
     return out;
   });
 
@@ -162,10 +193,44 @@ if (hard.unref) hard.unref();
     };
   });
 
+  /* ---------- 拼音页降级行为：音卡读汉字、四声静音（绝不读拉丁串） ---------- */
+  const page3 = await browser.newPage();
+  await harden(page3);
+  await page3.goto(BASE + 'pinyin.html', NAV);
+  await sleep(1200);
+  const pyFallback = await page3.evaluate(async () => {
+    const spoken = [];
+    if (window.speechSynthesis) window.speechSynthesis.speak = u => spoken.push(u.text);
+    const off = () => localStorage.setItem('hh_ttsFailAt', String(Date.now()));
+
+    /* 音卡：有呼读音汉字，降级应读「玻」 */
+    off();
+    const replay = document.getElementById('btnReplay');
+    if (replay) replay.click();
+    await new Promise(r => setTimeout(r, 400));
+    const cardSpoken = spoken.slice();
+
+    /* 四声：无同音汉字，降级应静音而不是读「à」 */
+    spoken.length = 0;
+    off();
+    const toneBtns = [...document.querySelectorAll('.tone-btn')];
+    if (toneBtns[3]) toneBtns[3].click();
+    await new Promise(r => setTimeout(r, 400));
+    const toneSpoken = spoken.slice();
+
+    localStorage.removeItem('hh_ttsFailAt');
+    return {
+      cardSpoken, toneSpoken,
+      toneBtnCount: toneBtns.length,
+      cardText: (document.getElementById('bigLetter') || {}).textContent || null
+    };
+  });
+
   await page.close();
   await page2.close();
+  await page3.close();
   await browser.close();
   clearTimeout(hard);
 
-  console.log(JSON.stringify({ pages: results, behavior, quest }, null, 1));
+  console.log(JSON.stringify({ pages: results, behavior, quest, pyFallback }, null, 1));
 })().catch(e => { console.error('SMOKE FAILED:', e); process.exit(1); });

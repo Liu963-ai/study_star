@@ -104,7 +104,9 @@
         big: it.char,
         bigCls: 'hanzi',
         say: '「' + it.char + '」的拼音是哪个？',
-        opts: shuffle([it.py, ...others]).map(p => ({ label: p, right: p === it.py, speak: p }))
+        /* pinyin:true —— 选项本身就是拼音标注（bà/shān…），
+           朗读时必须走拼音安全音色并在服务不可用时静音，否则会读成英文字母 */
+        opts: shuffle([it.py, ...others]).map(p => ({ label: p, right: p === it.py, speak: p, pinyin: true }))
       };
     }
     if (type === 'py2char') {
@@ -115,7 +117,10 @@
       return {
         big: it.py,
         bigCls: 'pinyin',
-        say: '哪个字读' + it.py + '？',
+        /* 题干含拼音标注，不能拼进整句：混排时 TTS 可能把 yī 读成英文字母。
+           拆成「引导语 + 单独读标注」，标注用拼音安全音色（见 sayQuestion）。 */
+        say: '下面这个音，是哪个字？',
+        sayPy: it.py,
         opts: shuffle([it.c, ...others]).map(c => ({ label: c, right: c === it.c, speak: c }))
       };
     }
@@ -204,20 +209,38 @@
     quest.classList.remove('hidden');
     /* autoSayDelay：题干音频的延迟（听音题需要稍等遮罩动画再出声）——
        此前这个字段被声明却从未生效，一律写死 350ms */
-    setTimeout(() => speak(curQ.say), curQ.autoSayDelay || 350);
-    /* 预热题目与选项语音（答对/答错反馈也提前合成） */
+    setTimeout(sayQuestion, curQ.autoSayDelay || 350);
+    /* 预热题目与选项语音（答对/答错反馈也提前合成）。
+       拼音标注与汉字必须分开预热：音色不同，混在一起会导致缓存键错配，
+       点击时仍要现场合成。 */
     if (window.HHTTS && window.HHTTS.prewarm) {
-      window.HHTTS.prewarm([curQ.say,
-        ...curQ.opts.map(o => o.speak || o.label),
-        '答对啦！小火车出发喽', '再想一想']);
+      const plain = curQ.opts.filter(o => !o.pinyin).map(o => o.speak || o.label);
+      const pyOpts = curQ.opts.filter(o => o.pinyin).map(o => o.speak || o.label);
+      window.HHTTS.prewarm([curQ.say, ...plain, '答对啦！小火车出发喽', '再想一想']);
+      if (curQ.sayPy) window.HHTTS.prewarm([curQ.sayPy], { pinyinVoice: true });
+      if (pyOpts.length) window.HHTTS.prewarm(pyOpts, { pinyinVoice: true });
     }
   }
-  $('questListen').addEventListener('click', () => { if (curQ) speak(curQ.say); });
+
+  /* 题干播报：py2char 的题干带一个拼音标注（如 yī），必须用拼音安全音色
+     单独读，不能拼进整句——混排时引擎可能把标注读成英文字母。
+     用 onend 链式保证顺序；降级通道也会补一次 onend（见 tts.js）。 */
+  function sayQuestion() {
+    if (!curQ) return;
+    if (curQ.sayPy) {
+      speak(curQ.say, { onend: () => speak(curQ.sayPy, { pinyinVoice: true }) });
+    } else {
+      speak(curQ.say);
+    }
+  }
+  $('questListen').addEventListener('click', () => sayQuestion());
   $('questClose').addEventListener('click', () => quest.classList.add('hidden'));
 
   function choose(btn, o) {
     sfx.tap();
-    speak(o.speak || o.label);
+    /* 选项若是拼音标注（char2py：bà/shān…），必须走拼音安全音色 +
+       降级保护，否则会被读成英文字母或丢失声调 */
+    speak(o.speak || o.label, o.pinyin ? { pinyinVoice: true } : undefined);
     if (answered) return;
     if (o.right) {
       answered = true;

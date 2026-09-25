@@ -3,8 +3,12 @@
    ------------------------------------------------------------
    · 拼音全表分组（23 声母 / 24 韵母 / 16 整体认读），胶囊切换，
      点击字母卡切下一个；
-   · 朗读一律走「呼读音汉字」（data.js read 字段）——TTS 读汉字，
-     不再把 b/p/m 读成英文字母；
+   · 朗读走「标准拼音标注」（AudioManager.SYLLABLES：b→bō、a→ā、
+     zhi→zhī），绝不把单个字母直接发给 TTS；音色强制路由到拼音安全音色
+     （opt.pinyinVoice），避免被某些音色读成英文字母；
+   · 降级保护：若 edge-tts 服务不可用，音卡改用呼读音汉字（read 字段）
+     朗读；四声（ā/á/ǎ/à）没有同音汉字，宁可静音也不出错误读音
+     ——系统语音读不准带调标注，读错等于教错；
    · 右侧组字卡：当前拼音可组成的汉字 + 词语，字/词/拼音均可点击
      朗读（词语拼音由 pinyin-pro 运行时标注）；
    · 长按说话：真实采集麦克风音量驱动声波柱（可按「保留录音」落盘）。
@@ -30,11 +34,8 @@
   const TONE_MARKS = ['ˉ', 'ˊ', 'ˇ', 'ˋ'];
 
   /* ---- 语音预热：后台预合成，点击时秒播（解决首次合成 1-4s 延迟） ----
-     呼读音/拼音音节走拼音安全音色（与 speak 路由一致）；
-     组字卡的字/词是普通词语，用用户所选音色。 */
-  function pinyinVid() {
-    return window.HHTTS ? window.HHTTS.pinyinVoiceId() : undefined;
-  }
+     拼音标注（呼读音/四声）走拼音安全音色，用 opt.pinyinVoice 声明，
+     与 speak 的路由保持同一份判定；组字卡的字/词是普通词语，用普通音色。 */
   function prewarmTexts(texts, opt) {
     if (window.HHTTS && window.HHTTS.prewarm) window.HHTTS.prewarm(texts, opt);
   }
@@ -43,7 +44,7 @@
     /* 预热必须与真正的播放内容一致：playLetter 播的是标准拼音标注
        （syllableOf('b') → 'bō'），不是呼读音汉字「玻」。
        之前预热汉字，等于每次切分组白合成一整组音频，点击时仍要现合成。 */
-    prewarmTexts(GROUPS[gi].list.map(x => window.HHTTS.syllableOf(x.p)), { voiceId: pinyinVid() });
+    prewarmTexts(GROUPS[gi].list.map(x => window.HHTTS.syllableOf(x.p)), { pinyinVoice: true });
   }
   function prewarmCurrent() {
     const it = cur();
@@ -51,38 +52,25 @@
       prewarmTexts([it.say, it.char, ...(it.words || [])]);
       return;
     }
-    /* 延迟 300ms：让当前点击的呼读音优先合成，再做四声与组字词预热 */
+    /* 延迟 1.5s：让当前点击的呼读音优先合成，再做四声与组字词预热 */
     setTimeout(() => {
       const tones = toneList();
       prewarmTexts([
         ...tones.map(t => t.mark),                                       /* 连读用裸音节 */
         ...tones.map(t => t.mark + '，第' + CN_TONE[t.tone - 1] + '声'),
         '欢迎来到拼音星球，先听我读，再跟着读一遍。'
-      ], { voiceId: pinyinVid() });
+      ], { pinyinVoice: true });
       prewarmTexts((it.chars || []).map(x => x.c).concat((it.chars || []).map(x => x.w)));
     }, 1500);
   }
 
   /* ---- 标调：给音节加第 tone(1-4) 声的声调符号 ----
-     规则（与教材一致）：按最长后缀找到韵母，标在其主元音上
-     （iu/ui 标在后一个字母；ü 用 ǖ ǘ ǚ ǜ）。
-     声母的四声练习＝「声母 + a」的拼读四声（bā bá bǎ bà）。 */
-  const FINAL_VOWEL = { 'üe':'e','ai':'a','ei':'e','ui':'i','ao':'a','ou':'o','iu':'u',
-                        'ie':'e','er':'e','an':'a','en':'e','in':'i','un':'u','ün':'ü',
-                        'ang':'a','eng':'e','ing':'i','ong':'o',
-                        'a':'a','o':'o','e':'e','i':'i','u':'u','ü':'ü' };
-  const SUFFIXES = Object.keys(FINAL_VOWEL).sort((x, y) => y.length - x.length);
-  const TONE_CHAR = { 'a':'āáǎà', 'o':'ōóǒò', 'e':'ēéěè', 'i':'īíǐì',
-                      'u':'ūúǔù', 'ü':'ǖǘǚǜ' };
+     规则与实现只有一份，在 tts.js 的 addTone（语音库预合成调用的同一份）。
+     历史上这里与 tts.js 各写一份、表项还不一致（tts.js 缺 'ü'/'ün' 两项），
+     导致语音库约 41% 的标注与页面实际播放的对不上，
+     36 个拼音的四声在库里全部退化成第一声。 */
   function addTone(syl, tone) {
-    for (const suf of SUFFIXES) {
-      if (syl.endsWith(suf)) {
-        const vowel = FINAL_VOWEL[suf];
-        const voiced = TONE_CHAR[vowel][tone - 1];
-        return syl.slice(0, syl.length - suf.length) + suf.replace(vowel, voiced);
-      }
-    }
-    return syl;
+    return (window.HHTTS && window.HHTTS.addTone) ? window.HHTTS.addTone(syl, tone) : syl;
   }
 
   /* ---- 当前拼音的四声列表（声母与 a 相拼；韵母/整体认读直接标调） ---- */
@@ -170,11 +158,10 @@
   let liandu = false;
 
   function chainSpeak(marks) {
-    const vid = window.HHTTS ? window.HHTTS.pinyinVoiceId() : undefined;
     const next = i => {
       if (i >= marks.length) return;
       const isLast = i === marks.length - 1;
-      speak(marks[i], isLast ? { voiceId: vid } : { voiceId: vid, onend: () => next(i + 1) });
+      speak(marks[i], isLast ? { pinyinVoice: true } : { pinyinVoice: true, onend: () => next(i + 1) });
     };
     next(0);
   }
@@ -210,13 +197,14 @@
       b.setAttribute('aria-label', '第' + CN_TONE[t.tone - 1] + '声');
       b.addEventListener('click', () => {
         sfx.tap();
-        const vid = window.HHTTS ? window.HHTTS.pinyinVoiceId() : undefined;
         if (liandu) {
           /* 连读：从第一声读到所点的声调 */
           chainSpeak(toneList().slice(0, t.tone).map(x => x.mark));
         } else {
-          /* edge-tts 会把带调拼音读成对应音节（已按音高轮廓验证） */
-          speak(t.mark + '，第' + CN_TONE[t.tone - 1] + '声', { voiceId: vid });
+          /* edge-tts 会把带调拼音读成对应音节（已按音高轮廓验证）。
+             四声没有同音汉字，无法提供降级替代文本 —— 服务不可用时
+             tts.js 会静音并提示家长，而不是用系统语音读错声调。 */
+          speak(t.mark + '，第' + CN_TONE[t.tone - 1] + '声', { pinyinVoice: true });
         }
       });
       toneRow.appendChild(b);
@@ -246,6 +234,12 @@
     return row;
   }
 
+  /* 降级替代文本：只有 read 真的是一个汉字时才有意义。
+     ei/ün/eng/ong 的 read 本身就是拼音标注（教材里没有对应汉字），
+     返回 null 即「无替代」→ 服务不可用时静音提示，不放错音。 */
+  const CN_CHAR = /^[\u4e00-\u9fa5]$/;
+  const cnRead = s => (CN_CHAR.test(s || '') ? s : null);
+
   /* ---- 播放示范音：声波柱与声音同步（标准拼音标注，非英文字母） ---- */
   function playLetter() {
     const it = cur();
@@ -256,8 +250,12 @@
       });
     } else {
       /* 标准拼音标注（bō/pō/zhī/ēi…）：由 AudioManager.SYLLABLES 统一转换，
-         绝不把单个字母或汉字直接传给 TTS */
+         绝不把单个字母直接传给 TTS。
+         pinyinVoice：路由到能正确朗读音节的音色（否则某些音色读成英文字母）；
+         fallbackText：服务不可用时改读呼读音汉字（b → 玻），读音仍然正确。 */
       speak(window.HHTTS.syllableOf(it.p), {
+        pinyinVoice: true,
+        fallbackText: cnRead(it.read),
         onstart: () => wave.classList.add('playing'),
         onend:   () => wave.classList.remove('playing')
       });

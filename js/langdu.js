@@ -18,22 +18,39 @@
   const btnNextText = $('btnNextText');
   const textLabel = $('textLabel');
 
-  /* ---- 课文列表：内置 10 篇；教材模式＝教材整册一句一句来 ---- */
+  /* ---- 按句末标点切句（保留标点，与 split(/(?<=[。！？])/) 等价）----
+     不用后行断言：Safari 16.4 之前 lookbehind 属语法错误，会让整个
+     langdu.js 无法解析、朗读页整页空白。 */
+  const SENT_END = '。！？';
+  function splitSentences(text) {
+    const clean = String(text || '').replace(/\s+/g, '');
+    const out = [];
+    let buf = '';
+    for (const ch of clean) {
+      buf += ch;
+      if (SENT_END.indexOf(ch) >= 0) { out.push(buf); buf = ''; }
+    }
+    if (buf) out.push(buf);
+    return out;
+  }
+
+  /* ---- 课文列表：内置 15 篇；教材模式＝教材整册一句一句来 ---- */
   const book = window.HHBooks && HHBooks.active();
   const TEXTS = book
     ? [{ title: '我的教材', text: '（教材课文按导入顺序逐句朗读）', segs: book.lines }]
     : DATA.langdu.list.map(t => {
-        const segs = [];
-        t.text.replace(/\s+/g, '').split(/(?<=[。！？])/).forEach(seg => {
-          const clean = seg.replace(/[，、：]/g, '');
-          if (clean.length < 2) return;
-          const arr = window.pinyinPro.pinyin(seg, { type: 'array', toneType: 'symbol' });
-          const words = [...seg].map((ch, i) => ({
-            ch: ch,
-            py: /[\u4e00-\u9fa5]/.test(ch) ? (arr[i] || ch) : ch
-          }));
-          segs.push(words);
-        });
+        const PY = window.pinyinPro;      /* 库缺失时降级为「只显示汉字」而不是整页报错 */
+        const segs = splitSentences(t.text)
+          .filter(seg => seg.replace(/[，、：]/g, '').length >= 2)
+          .map(seg => {
+            let arr = null;
+            try { arr = PY ? PY.pinyin(seg, { type: 'array', toneType: 'symbol' }) : null; }
+            catch (e) { arr = null; }
+            return [...seg].map((ch, i) => ({
+              ch: ch,
+              py: /[\u4e00-\u9fa5]/.test(ch) ? ((arr && arr[i]) || ch) : ch
+            }));
+          });
         return { title: t.title, segs: segs };
       });
   let textIdx = 0;
@@ -46,6 +63,7 @@
   let slow = false, tapMode = false, loopMode = false, speaking = false;
 
   function render() {
+    clearHlTimers();                 /* 换句/换篇时先清掉上一句的匀速高亮定时器 */
     const t = TEXTS[textIdx];
     const segs = t.segs;
     if (sentIdx >= segs.length) sentIdx = segs.length - 1;
@@ -83,6 +101,8 @@
       img.src = src;
       img.alt = '《' + t.title + '》插图';
       img.draggable = false;
+      img.loading = 'lazy';          /* 图片不抢首屏带宽 */
+      img.decoding = 'async';        /* 低端安卓上避免同步解码卡主线程 */
       img.addEventListener('error', () => {
         box.innerHTML = FALLBACK_SVG;
       });
@@ -109,6 +129,8 @@
   }
 
   /* ---- 卡拉OK高亮 ---- */
+  let hlTimers = [];
+  function clearHlTimers() { hlTimers.forEach(clearTimeout); hlTimers = []; }
   function highlightTo(n) {
     chars.forEach((c, i) => {
       c.classList.toggle('read', i < n);
@@ -119,6 +141,7 @@
   /* ---- 播整句：TTS boundary 驱动，匀速兜底 ---- */
   function playSentence() {
     speaking = true;
+    clearHlTimers();
     clearHighlight();
     speak(sentenceText, {
       rate: slow ? 0.8 : 0.95,
@@ -132,7 +155,10 @@
     });
     if (!reduceMotion) {
       const step = slow ? 480 : 380;
-      chars.forEach((_, i) => setTimeout(() => { if (speaking) highlightTo(i); }, step * i));
+      /* 定时器句柄要留住：一句 20 字就是 20 个定时器，切句后它们仍会
+         按旧下标去高亮新句子的字（表现为「字在别处闪」），还会逐句累积 */
+      hlTimers = chars.map((_, i) =>
+        setTimeout(() => { if (speaking) highlightTo(i); }, step * i));
     }
   }
   function clearHighlight() { highlightTo(-1); }
@@ -256,17 +282,20 @@
 
   /* ---- 自评三选：😀 3 星 / 🙂 2 星 / 😴 直接重读（0 星无惩罚） ----
      得星后推进到下一句；整篇读完才走结算。 */
+  let rated = false;          /* 一次自评只结算一次：防连点造成双份星星 + 双跳转 */
   document.querySelectorAll('.rate-opt').forEach(btn => {
     btn.addEventListener('click', async () => {
+      if (rated) return;
+      rated = true;
       await stopAll();
       const stars = +btn.dataset.stars;
       if (stars > 0) {
         sfxStar();
-        HH.addStars(stars);
         const title = TEXTS[textIdx] ? TEXTS[textIdx].title : '';
         const finished = !nextSentence();
         if (finished) {
-          speak('太棒了，你把这篇读完啦！');
+          /* 星星只由 gotoSettle 统一记账（以前这里先手工加一次，
+             结算里再加一次 → 一次自评拿双份星星，家长报告也随之虚高） */
           gotoSettle({
             title: '你完成了 1 关',
             stars: stars,
@@ -274,10 +303,12 @@
             module: 'langdu', task: 'langdu'
           });
         } else {
+          rated = false;
           speak('太棒了，我们读下一句');
           setTimeout(playSentence, 500);
         }
       } else {
+        rated = false;
         speak('没关系，我们再读一次！');
         setTimeout(playSentence, 400);
       }

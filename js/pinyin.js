@@ -11,7 +11,7 @@
    ============================================================ */
 (function () {
   'use strict';
-  const { speak, sfx } = window.HH;
+  const { speak, sfx, store } = window.HH;
   const HHRec = window.HHRec, AudioDB = window.AudioDB;
   const $ = id => document.getElementById(id);
   const bigLetter = $('bigLetter');
@@ -40,7 +40,10 @@
   }
   function prewarmGroup() {
     if (book) return;
-    prewarmTexts(GROUPS[gi].list.map(x => x.read), { voiceId: pinyinVid() });
+    /* 预热必须与真正的播放内容一致：playLetter 播的是标准拼音标注
+       （syllableOf('b') → 'bō'），不是呼读音汉字「玻」。
+       之前预热汉字，等于每次切分组白合成一整组音频，点击时仍要现合成。 */
+    prewarmTexts(GROUPS[gi].list.map(x => window.HHTTS.syllableOf(x.p)), { voiceId: pinyinVid() });
   }
   function prewarmCurrent() {
     const it = cur();
@@ -288,6 +291,15 @@
     if (HHRec.supported()) {
       try {
         pressHandle = await HHRec.start();
+        /* 抬手可能比麦克风授权更快（孩子点一下就松手）：
+           pressEnd 已经跑完并把 pressing 置回 false，这里若直接继续，
+           录音流将永远没人释放——麦克风指示灯常亮，是隐私事故级问题。
+           所以必须在 await 之后重新检查一次，过期就自己收尾。 */
+        if (!pressing) {
+          const h = pressHandle; pressHandle = null;
+          try { await h.stop(); } catch (err) {}
+          return;
+        }
         pressCtx = new (window.AudioContext || window.webkitAudioContext)();
         const src = pressCtx.createMediaStreamSource(pressHandle.stream);
         const analyser = pressCtx.createAnalyser();
@@ -315,6 +327,7 @@
     [...wave.children].forEach(b => { b.style.height = '14px'; });
     let blob = null;
     if (pressHandle) { blob = await pressHandle.stop(); pressHandle = null; }
+    if (blob) creditFollow();            /* 完成一次跟读：即时记星（拼音站此前完全不产生数据） */
     /* 识别态：3 个跳动小圆点，1200ms */
     recognizing.classList.remove('hidden');
     setTimeout(() => {
@@ -325,6 +338,19 @@
       }
       speak('那我再读一遍，你跟着来', { onend: playLetter });
     }, 1200);
+  }
+
+  /* ---- 跟读记账：1 次跟读 = 1 颗星 + 今日任务打勾；
+          每 8 次跟读算通关 1 关（进度上限 4，与其它三站口径一致） ---- */
+  const FOLLOW_PER_LEVEL = 8;
+  function creditFollow() {
+    const t = store.get('pyTrain', { n: 0, lv: 0 });
+    t.n = (t.n || 0) + 1;
+    const lv = Math.floor(t.n / FOLLOW_PER_LEVEL);
+    const up = lv > (t.lv || 0);
+    t.lv = lv;
+    store.set('pyTrain', t);
+    window.HH.record({ stars: 1, task: 'pinyin', module: up ? 'pinyin' : null });
   }
   [btnRec, btnFollow].forEach(btn => {
     btn.addEventListener('pointerdown', pressStart);

@@ -55,6 +55,8 @@
         b.dataset.type = type;
         tray.appendChild(b);
         bindDrag(b);
+        /* 点一下已放进凹槽的积木 = 取回托盘重选（原来放进去就再也拿不出来） */
+        b.addEventListener('click', () => takeBack(b));
       });
     });
     /* 预热本轮 8 种候选组合的成句语音 + 引导语（后台合成，成句时秒播） */
@@ -90,6 +92,7 @@
   /* ---- 拖拽：Pointer Events + 固定定位 + 轻微倾斜 ---- */
   function bindDrag(block) {
     block.addEventListener('pointerdown', e => {
+      if (block.dataset.snapped) return;        /* 已进凹槽：只用点击取回，不再拖拽 */
       e.preventDefault();
       const rect = block.getBoundingClientRect();
       const ghost = block;                       /* 直接把原块变成 fixed 跟随 */
@@ -115,19 +118,30 @@
           s.classList.toggle('hover', near);
         });
       }
-      function up(ev) {
+      function cleanup() {
         document.removeEventListener('pointermove', move);
         document.removeEventListener('pointerup', up);
+        document.removeEventListener('pointercancel', up);
+        document.querySelectorAll('.slot').forEach(s => s.classList.remove('hover'));
+      }
+      function up(ev) {
+        if (ev.pointerId != null && ev.pointerId !== pid) return;   /* 多指串扰：只认自己那根手指 */
+        cleanup();
         ghost.style.transform = '';
+        /* 被系统手势/来电打断（pointercancel）：直接弹回原位，不做吸附判定，
+           否则积木会永远停在 .dragging 的 fixed 位置上，同屏多个之后整页卡死 */
+        const cancelled = ev.type === 'pointercancel';
         /* 找同类型的最近槽：吸附容错 ±30px（槽内已有积木则不可再放） */
         let target = null;
-        document.querySelectorAll('.slot').forEach(s => {
-          if (s.dataset.type !== ghost.dataset.type || s.querySelector('.block-in')) return;
-          const r = s.getBoundingClientRect();
-          const cx = r.left + r.width / 2, cy = r.top + r.height / 2;
-          if (Math.abs(ev.clientX - cx) <= 30 + r.width / 2 &&
-              Math.abs(ev.clientY - cy) <= 30 + r.height / 2) target = s;
-        });
+        if (!cancelled) {
+          document.querySelectorAll('.slot').forEach(s => {
+            if (s.dataset.type !== ghost.dataset.type || s.querySelector('.block-in')) return;
+            const r = s.getBoundingClientRect();
+            const cx = r.left + r.width / 2, cy = r.top + r.height / 2;
+            if (Math.abs(ev.clientX - cx) <= 30 + r.width / 2 &&
+                Math.abs(ev.clientY - cy) <= 30 + r.height / 2) target = s;
+          });
+        }
         if (target) snapInto(ghost, target);
         else {
           /* 拖错/没对上：弹回托盘 + 温和提示（§7.1 再试一次，无惩罚） */
@@ -138,18 +152,36 @@
             ghost.classList.remove('dragging', 'returning');
             ghost.style.cssText = '';
           }, 260);
-          if (nearAnySlot(ev)) {
+          if (!cancelled && nearAnySlot(ev)) {
             sfx.hmm();
             toast('差一点点，再来一次');
             ghost.classList.add('wobble');
             setTimeout(() => ghost.classList.remove('wobble'), 900);
           }
         }
-        document.querySelectorAll('.slot').forEach(s => s.classList.remove('hover'));
       }
+      const pid = e.pointerId;
       document.addEventListener('pointermove', move);
       document.addEventListener('pointerup', up);
+      document.addEventListener('pointercancel', up);   /* 手势被打断也要走清理 */
     });
+  }
+
+  /* ---- 取回：点一下凹槽里的积木，放回托盘重新选 ---- */
+  function takeBack(block) {
+    if (!block.dataset.snapped) return;
+    const slot = block.closest('.slot');
+    if (!slot) return;
+    delete block.dataset.snapped;
+    filled[slot.dataset.type] = null;
+    snappedCount = Math.max(0, snappedCount - 1);
+    slot.innerHTML = '<span class="slot-hint">把积木放到这里</span>';
+    sentenceEl.classList.add('hidden');
+    sceneEl.classList.add('hidden');
+    btnAgain.classList.add('hidden');
+    renderTray(round);                 /* 托盘重建：候选词（含刚取回的）全部回来 */
+    sfx.tap();
+    speak('换一个');
   }
   /* 判断松手时是否悬在某个槽附近（用于区分「拖错槽」与「随手放下」） */
   function nearAnySlot(ev) {
@@ -166,6 +198,7 @@
     block.classList.remove('dragging');
     block.style.cssText = '';
     block.classList.add('block-in', 'pop');
+    block.dataset.snapped = '1';
     slot.appendChild(block);
     filled[slot.dataset.type] = block.dataset.word;
     snappedCount++;
@@ -179,6 +212,10 @@
     sentenceEl.classList.remove('hidden');
     renderScene();
     speak(text);
+    /* 即时反馈：每拼成一句就给 1 颗星 + 今日任务打勾。
+       原来 20 轮里前 19 轮没有任何奖励，只有全部拼完才给 3 颗星，
+       对一年级孩子来说反馈间隔太长。 */
+    window.HH.record({ stars: 1, task: 'jushi' });
     const isLast = book ? (round + 1 >= settleAt) : (round + 1 >= ROUNDS.length);
     if (isLast) {
       /* 全部轮次拼完：走结算流程（与需求方确认的规则） */
@@ -216,6 +253,8 @@
       img.src = 'assets/jushi-words/' + encodeURIComponent(p.word) + '.jpg';
       img.alt = p.word;
       img.draggable = false;
+      img.loading = 'lazy';
+      img.decoding = 'async';
       /* 加载失败退回 emoji */
       img.addEventListener('error', () => {
         const em = document.createElement('span');

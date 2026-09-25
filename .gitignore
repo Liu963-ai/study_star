@@ -1,2 +1,17 @@
 # 语音缓存：可再生（首次点击自动重新合成），不纳入版本管理
 tts_cache/
+
+# ---------- 本机生成物 / 构建中间件（可再生，不入版本管理） ----------
+__pycache__/
+*.pyc
+# 安全钩子的本机运行状态
+.mimosa/
+
+# ---------- 一次性构建输入（内容已在 assets/hanzi-data/ 解包入库） ----------
+# hanzi-writer-data.tgz（13.5MB，npm 包，9575 个 JSON 已解包）
+*.tgz
+# 语音服务连通性探测产物
+probe_tts.mp3
+# 生字数据抽取中间件
+_shengzi.json
+_shengzi_data.txt

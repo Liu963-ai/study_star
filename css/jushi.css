@@ -7,6 +7,7 @@
   display:flex; flex-direction:column; align-items:center; gap:18px;
   padding:10px 26px 150px;   /* 底部留白须大于导航栏高度，「再拼一句」不被遮挡 */
   min-height:calc(100vh - 76px - 76px - 30px);
+  min-height:calc(100dvh - 76px - 76px - 30px);
 }
 
 /* 拼出的整句（32px 楷体） */
@@ -38,12 +39,13 @@
 .slot[data-type="what"]{ --sc:var(--primary); }
 .slot.hover{ background:rgba(255,138,61,.10); }   /* 拖拽悬停提示 */
 .slot-label{ font-size:19px; font-weight:bold; }
-.slot-label.who{ color:var(--c-pinyin); }
-.slot-label.where{ color:var(--c-shengzi); }
-.slot-label.what{ color:var(--primary); }
+/* 白底上的模块色文字对比度只有 2.0–2.35:1，改用 ink 色 */
+.slot-label.who{ color:var(--c-pinyin-ink); }
+.slot-label.where{ color:var(--c-shengzi-ink); }
+.slot-label.what{ color:var(--primary-ink); }
 .slot-hint{ font-size:16px; color:var(--text-soft); opacity:.7; }
-/* 已放入积木的凹槽 */
-.slot .block-in{ cursor:default; }
+/* 已放入积木的凹槽：可点一下取回托盘 */
+.slot .block-in{ cursor:pointer; }
 
 /* 场景插图：成句后出现（与句子对应的三联词图，仅一次 500ms 入场） */
 .scene{ width:min(460px, 86%); }
@@ -91,7 +93,10 @@
   min-width:150px; height:76px;
   border-radius:16px;
   padding:0 20px;
-  color:#fff; font-size:24px; font-weight:bold;
+  /* 深棕字压浅色模块底：白字在 #4FC3F7/#81C784/#FF8A3D 上只有 2.0–2.35:1，
+     而积木是这一站的核心交互对象，必须能被一眼看清。
+     模块色仍在背景上，视觉识别不受影响。 */
+  color:var(--text); font-size:24px; font-weight:bold;
   display:inline-flex; align-items:center; justify-content:center; gap:12px;
   box-shadow:var(--shadow-card);
   touch-action:none;         /* 拖拽时不触发页面滚动 */

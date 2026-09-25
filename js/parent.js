@@ -224,10 +224,16 @@
       ov.remove();
     });
   }
-  /* 一键删除本机数据：confirm 二次确认 → 清空所有 hh_ 前缀键 → 回启动页 */
-  $('btnWipe').addEventListener('click', () => {
-    if (!confirm('确定删除本机全部练习数据吗？此操作不可恢复。')) return;
+  /* 一键删除本机数据：confirm 二次确认 → 清空所有 hh_ 前缀键 + 录音库 → 回启动页
+     （录音存在 IndexedDB，不在 localStorage 里；以前只清 localStorage，
+       「删除全部数据」之后录音其实还在，与给家长的承诺不一致。） */
+  $('btnWipe').addEventListener('click', async () => {
+    const recN = (window.AudioDB && AudioDB.count) ? await AudioDB.count() : 0;
+    const tip = '确定删除本机全部练习数据吗？此操作不可恢复。' +
+                (recN ? '\n\n将同时删除 ' + recN + ' 条孩子录音。' : '');
+    if (!confirm(tip)) return;
     Object.keys(localStorage).filter(k => k.indexOf('hh_') === 0).forEach(k => localStorage.removeItem(k));
+    if (window.AudioDB && AudioDB.wipe) await AudioDB.wipe();
     location.href = 'index.html';
   });
   /* 语音设置：打开大图标设置弹窗（js/voice.js） */
@@ -275,7 +281,11 @@
       list.appendChild(row);
     });
   }
+  /* 一键清空录音：先告知条数并要求确认（录音是本机唯一副本，删了不可恢复） */
   $('btnRecClear').addEventListener('click', async () => {
+    const n = await AudioDB.count();
+    if (!n) { renderRecList(); return; }
+    if (!confirm('将删除全部 ' + n + ' 条孩子录音，删除后无法恢复。确定吗？')) return;
     await AudioDB.clear();
     renderRecList();
   });

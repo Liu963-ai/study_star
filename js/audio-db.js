@@ -22,6 +22,10 @@ window.AudioDB = (function () {
       rq.onsuccess = () => res(rq.result);
       rq.onerror = () => rej(rq.error);
     });
+    /* 打开失败（隐私模式/配额/多标签版本变更）时清掉缓存：
+       否则这个 Promise 会带着 rejected 状态被永久复用，本次会话后续
+       所有读写全部失败且无法自愈。 */
+    dbp.catch(() => { dbp = null; });
     return dbp;
   }
   function req(rq) {
@@ -31,10 +35,15 @@ window.AudioDB = (function () {
     });
   }
 
+  /* 写入失败（配额满等）不抛给上层：录音存不下不该连带把「读完一篇的星星」吃掉 */
   async function put(rec) {
-    const db = await open();
-    const st = db.transaction(STORE, 'readwrite').objectStore(STORE);
-    return req(st.put(rec));
+    try {
+      const db = await open();
+      const st = db.transaction(STORE, 'readwrite').objectStore(STORE);
+      return await req(st.put(rec));
+    } catch (e) {
+      return null;
+    }
   }
   async function all() {
     const db = await open();
@@ -52,26 +61,60 @@ window.AudioDB = (function () {
     const st = db.transaction(STORE, 'readwrite').objectStore(STORE);
     return req(st.clear());
   }
+  /* 条数（不读 blob，家长页显示「将删除 N 条」用） */
+  async function count() {
+    try {
+      const db = await open();
+      const st = db.transaction(STORE, 'readonly').objectStore(STORE);
+      return await req(st.count());
+    } catch (e) { return 0; }
+  }
   /* 当前占用（字节） */
   async function usage() {
-    const arr = await all();
-    return arr.reduce((s, r) => s + (r.blob ? r.blob.size : 0), 0);
+    try {
+      const arr = await all();
+      return arr.reduce((s, r) => s + (r.blob ? r.blob.size : 0), 0);
+    } catch (e) { return 0; }
   }
-  /* 30 天自动过期：初始化时清理，返回清理条数 */
+  /* 30 天自动过期：初始化时清理，返回清理条数。
+     只用游标逐个取「键 + 时间戳」，避免把几十 MB 的录音 blob 全量读进内存。 */
   async function purgeExpired() {
     const cutoff = Date.now() - KEEP_DAYS * 86400000;
-    const arr = await all();
     let n = 0;
-    for (const r of arr) {
-      if (r.ts < cutoff) { await del(r.id); n++; }
-    }
+    try {
+      const db = await open();
+      const st = db.transaction(STORE, 'readwrite').objectStore(STORE);
+      n = await new Promise((res, rej) => {
+        let c = 0;
+        const rq = st.openCursor();
+        rq.onsuccess = () => {
+          const cur = rq.result;
+          if (!cur) { res(c); return; }
+          if ((cur.value && cur.value.ts) < cutoff) { cur.delete(); c++; }
+          cur.continue();
+        };
+        rq.onerror = () => rej(rq.error);
+      });
+    } catch (e) { /* 清理失败不影响主流程 */ }
     return n;
+  }
+  /* 彻底删除整库（家长「删除本机全部数据」时调用，与 localStorage 清理口径一致） */
+  async function wipe() {
+    try {
+      if ('indexedDB' in window && indexedDB.deleteDatabase) {
+        await new Promise(res => {
+          const rq = indexedDB.deleteDatabase(DB);
+          rq.onsuccess = rq.onerror = rq.onblocked = () => res();
+        });
+      }
+    } catch (e) {}
+    dbp = null;
   }
   /* 某条剩余保留天数 */
   function daysLeft(ts) {
     return Math.max(0, KEEP_DAYS - Math.floor((Date.now() - ts) / 86400000));
   }
 
-  return { put: put, all: all, del: del, clear: clear, usage: usage,
-           purgeExpired: purgeExpired, daysLeft: daysLeft, KEEP_DAYS: KEEP_DAYS };
+  return { put: put, all: all, del: del, clear: clear, count: count, wipe: wipe,
+           usage: usage, purgeExpired: purgeExpired, daysLeft: daysLeft, KEEP_DAYS: KEEP_DAYS };
 })();

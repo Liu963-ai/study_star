@@ -63,6 +63,16 @@ window.HHTTS = (function () {
      assets/pinyin-audio/，即自动优先播放官方录音；目录为空时使用 TTS 合成。
      官方资源需在官方平台登录后下载，软件不做自动抓取。 */
   const OFFICIAL_DIR = 'assets/pinyin-audio';
+  /* 官方录音包是否已放置：目录里没有 mp3 时，逐条 fetch 会稳定产生
+     约 273 次 404（每个标注一次），把首屏 I/O 全占满。
+     只要第一条就 404，就认为整个目录为空并在本机记下来，之后不再探测。 */
+  const OFFICIAL_FLAG = 'hh_officialAudioMissing';
+  function officialAudioMissing() {
+    try { return localStorage.getItem(OFFICIAL_FLAG) === '1'; } catch (e) { return false; }
+  }
+  function markOfficialAudioMissing() {
+    try { localStorage.setItem(OFFICIAL_FLAG, '1'); } catch (e) {}
+  }
 
   /* ---- 拼音语音库：IndexedDB 持久化（blob），启动全量加载进内存 ----
      命中后点击零网络请求。库存键＝标准拼音标注。 */
@@ -100,6 +110,7 @@ window.HHTTS = (function () {
 
   /* ---- 启动全量预加载：官方录音包优先 → 本地库存 → 云端合成（一次性） ---- */
   let bankInFlight = false;
+  let bankRounds = 0;                 /* 未铺满时的补轮次数（最多 3 轮） */
   async function ensurePinyinBank() {
     if (bankInFlight) return 0;
     bankInFlight = true;
@@ -140,20 +151,25 @@ window.HHTTS = (function () {
       for (const ann of uniq) {
         const key = keyFor(ann, GLOBAL.rate, GLOBAL.pitch);
         if (mem.has(key)) { filled++; continue; }
-        /* ① 官方录音包 */
-        try {
-          const r = await fetch(OFFICIAL_DIR + '/' + encodeURIComponent(ann) + '.mp3');
-          if (r.ok) {
-            const blob = await r.blob();
-            await bankPut(ann, blob);
-            mem.set(key, URL.createObjectURL(blob));
-            filled++; continue;
-          }
-        } catch (e) {}
+        /* ① 官方录音包（已确认目录为空则整轮跳过，不再逐条 404） */
+        if (!officialAudioMissing()) {
+          try {
+            const r = await fetch(OFFICIAL_DIR + '/' + encodeURIComponent(ann) + '.mp3');
+            if (r.ok) {
+              const blob = await r.blob();
+              await bankPut(ann, blob);
+              bankKeys.add(key);
+              mem.set(key, URL.createObjectURL(blob));
+              filled++; continue;
+            }
+            markOfficialAudioMissing();
+          } catch (e) {}
+        }
         /* ② 本地库存（上次已下载） */
         try {
           const blob = await bankGet(ann);
           if (blob) {
+            bankKeys.add(key);
             mem.set(key, URL.createObjectURL(blob));
             filled++; continue;
           }
@@ -163,13 +179,18 @@ window.HHTTS = (function () {
         try {
           const blob = await fetchOnce(ann, GLOBAL.rate, GLOBAL.pitch, 0, 8000);
           await bankPut(ann, blob);
+          bankKeys.add(key);
           mem.set(key, URL.createObjectURL(blob));
           filled++;
         } catch (e) { setFailAt(Date.now()); }
       }
-      /* 没铺满：90s 后自动补一轮（直到全量进库） */
-      if (filled < uniq.length) {
-        setTimeout(() => { bankInFlight = false; ensurePinyinBank(); }, 90000);
+      /* 没铺满：按 90s → 3min → 6min 退避补一轮，最多 3 轮。
+         （以前是无上限每 90s 重来一次，服务长时间不可用时能空转一整夜，
+            后台标签页也照跑。） */
+      if (filled < uniq.length && bankRounds < 3) {
+        const delay = 90000 * Math.pow(2, bankRounds);
+        bankRounds++;
+        setTimeout(ensurePinyinBank, delay);
         return filled;
       }
     } finally {
@@ -221,14 +242,28 @@ window.HHTTS = (function () {
   function markUp() { setFailAt(0); }
 
   /* ---- 朗读会话管理：新朗读顶替旧朗读（与原 HH.speak 行为一致） ---- */
-  let seq = 0, curAudio = null, curAbort = null;
+  let seq = 0, curAudio = null;
   const mem = new Map();          /* 进程内音频缓存：key → objectURL */
   const pending = new Map();      /* 合成中去重：key → Promise<url>（防并发重复合成） */
+  const bankKeys = new Set();     /* 语音库条目：内存淘汰时必须跳过（见 evict） */
 
   function stop() {
     seq++;
-    if (curAbort) { try { curAbort.abort(); } catch (e) {} curAbort = null; }
     if (curAudio) { curAudio.pause(); curAudio = null; }
+  }
+
+  /* 内存缓存淘汰：按条数控制长会话膨胀，但**绝不淘汰语音库条目**。
+     语音库约 273 条，是「点击零网络请求」的基础；按固定 60 条上限淘汰，
+     会把刚装好的语音库逐条 revoke 掉，语音库等于白装。 */
+  function evict() {
+    const limit = Math.max(60, bankKeys.size + 60);
+    while (mem.size > limit) {
+      let victim = null;
+      for (const k of mem.keys()) { if (!bankKeys.has(k)) { victim = k; break; } }
+      if (!victim) break;
+      URL.revokeObjectURL(mem.get(victim));
+      mem.delete(victim);
+    }
   }
 
   /* 语速映射：设置档位为基准；学习页慢速朗读（opt.rate ≤0.85）再降 10% */
@@ -281,11 +316,7 @@ window.HHTTS = (function () {
       setFailAt(0);                              /* 成功＝服务恢复 */
       const url = URL.createObjectURL(await res.blob());
       mem.set(key, url);
-      if (mem.size > 60) {                   /* 内存缓存上限，防长会话膨胀 */
-        const first = mem.keys().next().value;
-        URL.revokeObjectURL(mem.get(first));
-        mem.delete(first);
-      }
+      evict();                               /* 内存缓存上限，防长会话膨胀 */
       return url;
     })();
     pending.set(key, job);
@@ -375,7 +406,6 @@ window.HHTTS = (function () {
     /* 失败兜底：未传 fallback（如经 common.js 转发）时用本机备用声 */
     if (typeof fallback !== 'function') fallback = browserSpeak;
     const my = ++seq;
-    if (curAbort) { try { curAbort.abort(); } catch (e) {} curAbort = null; }
     if (curAudio) { curAudio.pause(); curAudio = null; }
 
     const textS = String(text);

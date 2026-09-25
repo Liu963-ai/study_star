@@ -13,10 +13,11 @@
   color:var(--text-soft);
   transition:transform .15s ease-out, background .15s ease-out, color .15s ease-out;
 }
-.tab.on{ background:var(--primary); color:#fff; box-shadow:var(--shadow-soft); }
+.tab.on{ background:var(--primary); color:var(--primary-ink); box-shadow:var(--shadow-soft); }
 
 .reward-main{
   height:calc(100vh - 76px - 60px);
+  height:calc(100dvh - var(--topbar-h) - 60px);
   min-height:380px; overflow:auto;
   padding:14px 26px 36px;
 }
@@ -33,7 +34,8 @@
   padding:30px 24px 24px;
   display:flex; flex-direction:column; align-items:center; gap:2px;
 }
-.star-ico{ width:76px; height:76px; color:#fff; filter:drop-shadow(0 4px 8px rgba(0,0,0,.10)); }
+.star-ico{ width:76px; height:76px; color:#6B4A00; filter:drop-shadow(0 4px 8px rgba(0,0,0,.10)); }
+/* 白星压在阳光黄上只有 1.41:1（等于看不见），改深棕与顶栏星星罐一致 */
 .star-num{ font-size:48px; color:var(--text); line-height:1.3; }
 .star-week{ font-size:20px; color:#6B4A00; }
 .star-week i{ font-style:normal; font-weight:bold; }
@@ -55,7 +57,7 @@
 .badge-ball{
   width:120px; height:120px; border-radius:50%;
   display:flex; align-items:center; justify-content:center;
-  background:var(--bc); color:#fff;
+  background:var(--bc); color:var(--text);   /* 白描边压在浅模块色上仅 2:1 */
   box-shadow:var(--shadow-card);
   transition:transform .15s ease-out;
 }
@@ -88,10 +90,10 @@
 }
 .shop-emoji{ font-size:56px; line-height:1.2; }
 .shop-name{ font-size:22px; font-weight:bold; color:var(--text); }
-.shop-price{ font-size:20px; color:var(--retry); font-weight:bold; }
+.shop-price{ font-size:20px; color:#8A6100; font-weight:bold; }   /* --retry 在白卡上仅 1.9:1 */
 .shop-buy{
   min-height:60px; min-width:120px;
-  border-radius:999px; background:var(--primary); color:#fff;
+  border-radius:999px; background:var(--primary); color:var(--primary-ink);
   font-size:21px; font-weight:bold;
   display:inline-flex; align-items:center; justify-content:center;
   box-shadow:var(--shadow-soft);

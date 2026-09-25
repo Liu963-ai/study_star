@@ -38,6 +38,7 @@ body.end-page{ overflow:hidden; position:relative; min-height:100vh; }
 /* ---- 主列 ---- */
 .end-main{
   min-height:100vh;
+  min-height:100dvh;
   display:flex; flex-direction:column; align-items:center; justify-content:center;
   gap:12px; padding:16px; text-align:center;
 }
@@ -65,11 +66,13 @@ body.end-page{ overflow:hidden; position:relative; min-height:100vh; }
 .end-tree{ height:240px; }
 .end-tree .gtm{ pointer-events:none; }
 
-/* +N 颗星星胶囊：阳光黄底 + 白色星 + 白字 */
+/* +N 颗星星胶囊：阳光黄底 + 深棕字
+   （原来是白字压阳光黄，对比度仅 1.41:1——全站最该被看清的奖励反馈
+     反而是最难看清的；深棕字与顶栏星星罐保持同一套配色） */
 .star-capsule{
   min-height:60px; padding:8px 30px;
   border-radius:999px;
-  background:var(--c-jiangli); color:#fff;
+  background:var(--c-jiangli); color:var(--c-jiangli-ink);
   font-size:26px; font-weight:bold;
   display:inline-flex; align-items:center; gap:10px;
   box-shadow:var(--shadow-soft);

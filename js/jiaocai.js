@@ -11,9 +11,19 @@
 
   /* 本地能力服务地址（P0 修复）：/llm 由 7860 端口的 tts_server.py 提供，
      8767 是纯静态服务、没有任何 API 路由——此前用相对路径 fetch('/llm')
-     会 501，导致 AI 整理 100% 失效。端口只在这一处定义。
-     地址跟随页面访问主机（本机 127.0.0.1 / 手机经局域网 IP 访问均可用）。 */
+     会 501，导致 AI 整理 100% 失效。     端口只在这一处定义。
+     注意：/llm 只允许电脑本机调用（局域网来源一律 403），所以
+     「AI 整理」必须在电脑上操作，手机上只能用 PDF 提取 / 手动整理。 */
   const LLM_BASE = 'http://' + (location.hostname || '127.0.0.1') + ':7860';
+  const IS_LOCAL = /^(127\.0\.0\.1|localhost)$/.test(location.hostname || '127.0.0.1');
+  /* 把服务端/网络的英文错误翻译成家长看得懂的中文（原来直接把英文原文显示在界面上） */
+  function zhErr(msg) {
+    const m = String(msg || '');
+    if (/local only/i.test(m)) return 'AI 整理只能在电脑本机上使用（手机上请用「手动整理」）';
+    if (/401/.test(m)) return 'Key 无效或未生效，请到 open.bigmodel.cn 核对后重试';
+    if (/502|timed out|timeout/i.test(m)) return '连接智谱接口超时，请检查网络后重试';
+    return m || '失败';
+  }
 
   /* ================= AI 设置 ================= */
   $('llmKey').value = store.get('llmKey', '');
@@ -22,6 +32,10 @@
   $('llmModel').addEventListener('change', () => store.set('llmModel', $('llmModel').value));
 
   $('btnLlmTest').addEventListener('click', async () => {
+    if (!IS_LOCAL) {
+      $('llmStatus').textContent = '❌ AI 整理只能在电脑上操作（手机请用「手动整理」）';
+      return;
+    }
     const key = $('llmKey').value.trim();
     if (!key) { $('llmStatus').textContent = '请先粘贴 Key'; return; }
     store.set('llmKey', key);
@@ -33,10 +47,8 @@
           messages: [{ role: 'user', content: '只回复：ok' }] })
       });
       const data = await res.json();
-      let msg = data.msg || '';
-      if (/401/.test(msg)) msg = 'Key 无效或未生效，请到 open.bigmodel.cn 核对后重试';
       $('llmStatus').textContent = data.ok ? ('✅ 连接成功：' + (data.content || '').slice(0, 20))
-                                           : ('❌ ' + (msg || '失败'));
+                                           : ('❌ ' + zhErr(data.msg));
     } catch (e) {
       $('llmStatus').textContent = '❌ 本地服务未启动（python tts_server.py）';
     }
@@ -101,7 +113,7 @@
         })
       });
       const data = await res.json();
-      if (!data.ok) { $('genStatus').textContent = 'AI 调用失败：' + (data.msg || ''); return; }
+      if (!data.ok) { $('genStatus').textContent = 'AI 调用失败：' + zhErr(data.msg); return; }
       const parsed = JSON.parse(data.content);       /* response_format=json_object 保证是 JSON */
       buildPreview(text, parsed);
       $('genStatus').textContent = '✅ AI 整理完成，请核对下方预览';

@@ -35,16 +35,32 @@ window.Report = (function () {
 
   /* ---- 在站时长追踪：仅在四个学习页生效（10s 心跳 + 离开兜底） ----
      达到家长设置的每日上限（hh_dailyLimit 分钟，默认 20）后，
-     在学习页显示温和的收尾遮罩（不含任何惩罚意味） */
+     在学习页显示温和的收尾遮罩（不含任何惩罚意味）。
+
+     只计「页面可见且在交互」的时间：
+     · 页面切到后台（document.hidden）不计——Chrome 会把后台定时器节流到
+       约 1 次/分，但每次仍会加上真实的 60s「停留」，一个后台标签页放一夜
+       就能刷出几百分钟假数据，并把孩子当天的时长上限顶掉（被遮罩锁住）。
+     · 连续 60s 没有触摸/点击/按键视为离开（去吃饭、睡着了）不计。 */
+  const IDLE_MS = 60000;
+  let lastTouch = Date.now();
+  ['pointerdown', 'keydown', 'touchstart', 'wheel'].forEach(ev =>
+    document.addEventListener(ev, () => { lastTouch = Date.now(); }, { passive: true, capture: true }));
+
   function track() {
     if (!isLearnPage()) return;
     const s = readJSON('hh_sessionLog', { date: todayKey(), sec: 0, last: Date.now() });
     if (s.date !== todayKey()) { s.date = todayKey(); s.sec = 0; }
     const now = Date.now();
-    s.sec += Math.min(120, Math.round((now - (s.last || now)) / 1000));  /* 单次最多记 2 分钟，防时钟异常 */
+    let delta = Math.min(120, Math.round((now - (s.last || now)) / 1000));  /* 单次最多记 2 分钟，防时钟异常 */
+    if (document.hidden || now - lastTouch > IDLE_MS) delta = 0;            /* 后台/闲置不计时 */
+    s.sec += delta;
     s.last = now;
-    localStorage.setItem('hh_sessionLog', JSON.stringify(s));
-    localStorage.setItem('hh_lastActive', JSON.stringify(todayKey()));   /* 最近使用日期（多天未学如实呈现用） */
+    try { localStorage.setItem('hh_sessionLog', JSON.stringify(s)); } catch (e) {}
+    /* 最近使用日期：只在跨天时写一次，不必每 10 秒白写一遍 */
+    if (readJSON('hh_lastActive', null) !== todayKey()) {
+      try { localStorage.setItem('hh_lastActive', JSON.stringify(todayKey())); } catch (e) {}
+    }
     checkLimit(s.sec);
   }
 

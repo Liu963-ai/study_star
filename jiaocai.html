@@ -3,6 +3,8 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="icon" href="assets/icons/icon-192.png">
+<link rel="apple-touch-icon" href="assets/icons/icon-192.png">
 <link rel="manifest" href="manifest.json">
 <meta name="theme-color" content="#FF8A3D">
 <title>汉字小星球 · 我的教材</title>
@@ -23,10 +25,10 @@
     <div class="p-card">
       <h3>AI 设置（智谱大模型）</h3>
       <div class="set-row"><span>API Key</span>
-        <input type="password" id="llmKey" placeholder="粘贴智谱 API Key" autocomplete="off">
+        <input type="password" id="llmKey" placeholder="粘贴智谱 API Key" autocomplete="off" aria-label="智谱 API Key">
       </div>
       <div class="set-row"><span>模型</span>
-        <select id="llmModel">
+        <select id="llmModel" aria-label="AI 模型">
           <option value="glm-4-flash" selected>glm-4-flash（免费）</option>
           <option value="glm-4-air">glm-4-air</option>
           <option value="glm-4-plus">glm-4-plus</option>
@@ -45,7 +47,7 @@
         <input type="file" id="pdfFile" accept="application/pdf" hidden>
         <span class="jc-status" id="pdfStatus">未选择</span>
       </div>
-      <textarea class="jc-text" id="jcText" rows="8"
+      <textarea class="jc-text" id="jcText" rows="8" aria-label="课文文本"
                 placeholder="也可以直接把课文粘贴到这里（支持上一步 PDF 自动提取的文本）"></textarea>
       <div class="jc-row">
         <button class="p-btn p-btn-primary" id="btnAI">✨ AI 整理成题目</button>
@@ -54,9 +56,9 @@
       <!-- 手动模式的三类词语输入（AI 不可用时的降级路径） -->
       <div class="jc-manual hidden" id="manualBox">
         <p class="jc-hint">按类型填词语（逗号分隔），生字与句子会自动从课文提取。</p>
-        <input class="jc-in" id="mWho" placeholder="谁的词，如：小猫,小鸟">
-        <input class="jc-in" id="mWhere" placeholder="在哪里的词，如：在树上,在屋里">
-        <input class="jc-in" id="mWhat" placeholder="做什么的词，如：唱歌,飞翔">
+        <input class="jc-in" id="mWho" placeholder="谁的词，如：小猫,小鸟" aria-label="谁（主语类词语）">
+        <input class="jc-in" id="mWhere" placeholder="在哪里的词，如：在树上,在屋里" aria-label="在哪里（地点类词语）">
+        <input class="jc-in" id="mWhat" placeholder="做什么的词，如：唱歌,飞翔" aria-label="做什么（动作类词语）">
       </div>
       <span class="jc-status" id="genStatus"></span>
     </div>
@@ -64,7 +66,7 @@
     <!-- 卡 3：整理结果预览（确认后才入库） -->
     <div class="p-card hidden" id="previewCard">
       <h3>整理结果预览</h3>
-      <div class="set-row"><span>单元名称</span><input class="jc-in" id="bookName"></div>
+      <div class="set-row"><span>单元名称</span><input class="jc-in" id="bookName" aria-label="单元名称"></div>
       <p class="jc-hint">生字（拼音已用本地拼音库校正，可点击修改）</p>
       <div class="char-preview" id="charPreview"></div>
       <p class="jc-hint" id="statLine"></p>

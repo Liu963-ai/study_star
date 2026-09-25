@@ -8,6 +8,7 @@
   font-family:"PingFang SC","Microsoft YaHei",system-ui,sans-serif;
   font-size:15px;
   min-height:100vh;
+  min-height:100dvh;
 }
 .parent-page h1,.parent-page h2,.parent-page h3{ font-weight:600; }
 

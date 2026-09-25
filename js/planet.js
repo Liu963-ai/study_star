@@ -32,18 +32,27 @@ window.HHPlanet = (function () {
     host.innerHTML = '';
     host.appendChild(box);
 
-    /* 一次性创建 3 个 <video>，同一时刻只显示一支 */
+    /* 一次性创建 3 个 <video>，同一时刻只显示一支。
+       只给「当前状态」挂 src，其余两支把地址存在 data-src 里、preload=none：
+       三支 mp4 合计约 13MB，全量挂 src 会让 index/home/jiesuan 三个页面
+       首屏白白多下 8MB 以上（手机 4G 约多等 6-10 秒）。
+       切到某个状态时才真正开始下载那一支。 */
     const videos = {};
     STATES.forEach(key => {
       const v = document.createElement('video');
-      v.src = 'assets/planets/planet-' + key + '.mp4';
-      /* 属性必须同时具备：autoplay muted loop playsinline preload=auto；不得有 controls/poster */
+      /* 属性必须同时具备：autoplay muted loop playsinline；不得有 controls/poster */
       v.autoplay = true;
       v.muted = true;
       v.loop = true;
       v.playsInline = true;
-      v.setAttribute('preload', 'auto');
       v.setAttribute('aria-hidden', 'true');   /* 吉祥物是装饰，语义由 TTS 承担 */
+      if (key === state) {
+        v.src = 'assets/planets/planet-' + key + '.mp4';
+        v.setAttribute('preload', 'auto');
+      } else {
+        v.dataset.src = 'assets/planets/planet-' + key + '.mp4';
+        v.setAttribute('preload', 'none');
+      }
       v.style.width = '100%';
       v.style.height = '100%';
       v.style.objectFit = 'contain';
@@ -51,6 +60,13 @@ window.HHPlanet = (function () {
       box.appendChild(v);
       videos[key] = v;
     });
+    /* 需要时才下载该状态的视频（只下载一次，之后复用） */
+    function ensureSrc(v) {
+      if (!v.src && v.dataset.src) {
+        v.src = v.dataset.src;
+        delete v.dataset.src;
+      }
+    }
 
     /* 减少动态：保留视频元素但暂停在首帧（不隐藏、不删除） */
     function applyReduced() {
@@ -69,8 +85,9 @@ window.HHPlanet = (function () {
         STATES.forEach(k => {
           const v = videos[k];
           if (k === state) {
+            ensureSrc(v);
             v.style.display = 'block';
-            if (!reduced) { const p = v.play(); if (p && p.catch) p.catch(() => {}); }
+            if (!reduced && !document.hidden) { const p = v.play(); if (p && p.catch) p.catch(() => {}); }
           } else {
             v.style.display = 'none';
             v.pause();
@@ -80,8 +97,22 @@ window.HHPlanet = (function () {
         return state;
       },
       getState() { return state; },
-      destroy() { box.remove(); }
+      destroy() {
+        document.removeEventListener('visibilitychange', onVisible);
+        STATES.forEach(k => { try { videos[k].pause(); } catch (e) {} });
+        box.remove();
+      }
     };
+
+    /* 页面不可见（切到别的 App / 锁屏）时暂停解码：
+       吉祥物是 loop 视频，后台继续解码会白耗流量与电。 */
+    function onVisible() {
+      const v = videos[state];
+      if (!v) return;
+      if (document.hidden) { try { v.pause(); } catch (e) {} }
+      else if (!reduced) { const p = v.play(); if (p && p.catch) p.catch(() => {}); }
+    }
+    document.addEventListener('visibilitychange', onVisible);
 
     /* 初始播放当前状态；隐藏的两支暂停（同一时刻只解码一支，§4.2） */
     STATES.forEach(k => { if (k !== state) videos[k].pause(); });

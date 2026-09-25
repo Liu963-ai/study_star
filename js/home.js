@@ -32,10 +32,13 @@
     if (done[el.dataset.task]) el.classList.add('done');
   });
 
-  /* ---- 四大模块按钮底部 7 个进度小点（已通关的按 hh_progress 填实） ---- */
+  /* ---- 四大模块按钮底部进度小点（数量＝进度上限，已通关的填实）----
+     以前这里画 7 个点，而进度上限是 4：孩子通关 4 次后永远亮不满，
+     属于明确的负反馈。点数与上限统一取自 HH.PROGRESS_MAX。 */
   document.querySelectorAll('.module-dots').forEach(el => {
-    const n = Math.min(getProgress(el.dataset.module), 7);
-    for (let i = 0; i < 7; i++) {
+    const max = HH.PROGRESS_MAX;
+    const n = Math.min(getProgress(el.dataset.module), max);
+    for (let i = 0; i < max; i++) {
       const d = document.createElement('span');
       d.className = 'pd' + (i < n ? ' full' : '');
       el.appendChild(d);

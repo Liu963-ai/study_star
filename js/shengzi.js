@@ -33,6 +33,9 @@
   const svgCtx = { paths: [], idx: 0, anim: null, paused: false, total: 0 };
 
   function svgBuild(item) {
+    /* 切字时先取消上一个字的描红动画：Web Animations 的 onfinish 链不会
+       因为 DOM 被清空而停止，否则上一个字的「第 3 笔」会插进新字的朗读里 */
+    if (svgCtx.anim) { try { svgCtx.anim.cancel(); } catch (e) {} svgCtx.anim = null; }
     svg.innerHTML = '';
     svgCtx.paths = [];
     svg.classList.remove('hidden');
@@ -91,6 +94,13 @@
     svg.classList.add('hidden');
     charShadow.classList.add('hidden');
     hwBox.classList.remove('hidden');
+    /* 销毁上一个字的 HanziWriter：animateCharacter() 内部是
+       delayBetweenStrokes 定时链，innerHTML='' 不会中断它，
+       旧字的「第 N 笔」会继续播报并与新字朗读互相打断 */
+    if (hwCtx.writer) {
+      try { if (typeof hwCtx.writer.destroy === 'function') hwCtx.writer.destroy(); } catch (e) {}
+      hwCtx.writer = null;
+    }
     hwBox.innerHTML = '';
     svgCtx.anim = null;
     fetchStrokeData(ch, 0);
@@ -158,8 +168,32 @@
      公共：载入当前字（按有无手绘笔顺分流）
      ============================================================ */
   function currentChar() { return ITEMS[ci].char; }
+
+  /* ---- 已学字数（与首页「生字 N」同源：都读 hh_charDone） ---- */
+  function charDoneMap() {
+    try { return JSON.parse(localStorage.getItem('hh_charDone') || '{}'); } catch (e) { return {}; }
+  }
+  function charKnown(ch) { return !!charDoneMap()[ch]; }
+  function refreshZiCount() {
+    const el = $('ziCount');
+    if (el) el.textContent = Object.keys(charDoneMap()).length;
+  }
+
+  /* ---- 学完一个字：第一次学 = 1 颗星 + 今日任务打勾；每 5 个新字 = 1 关进度
+          （生字站此前完全不计入星星/任务/进度，导致「识字小能手」徽章、
+            家长报告的生字进度、首页任务圈都无法产生数据） ---- */
+  const CHAR_PER_LEVEL = 5;
+  const credited = new Set();          /* 本次会话已加过星的字，防重播重复加星 */
   function charLearned(ch) {
+    const isNew = !charKnown(ch);
     if (window.HHBooks) HHBooks.markCharDone(ch);
+    refreshZiCount();
+    if (!isNew || credited.has(ch)) return;
+    credited.add(ch);
+    const lv = Math.floor(Object.keys(charDoneMap()).length / CHAR_PER_LEVEL);
+    const up = lv > (store.get('szLevel', 0) || 0);
+    if (up) store.set('szLevel', lv);
+    window.HH.record({ stars: 1, task: 'shengzi', module: up ? 'shengzi' : null });
   }
 
   let beginTimer = null;     /* 读音播报兜底计时器（静音时直接开画） */
@@ -169,6 +203,7 @@
     const it = ITEMS[ci];
     clearTimeout(beginTimer);
     const seq = ++loadSeq;
+    refreshZiCount();
     $('zicardChar').textContent = it.char;
     $('strokeSay').textContent = it.char + '，看老师写一遍';
     $('btnNextChar').classList.remove('hidden');
@@ -274,7 +309,7 @@
     loadChar();
   });
   $('btnZicard').addEventListener('click', () => {
-    speak('你已经收集了 ' + store.get('ziCount', 0) + ' 个字');
+    speak('你已经收集了 ' + Object.keys(charDoneMap()).length + ' 个字');
   });
 
   /* ---- 供两个模式共用的进度点渲染（按当前总笔数重建） ---- */

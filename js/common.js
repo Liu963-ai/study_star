@@ -15,12 +15,20 @@ window.HH = (function () {
       catch (e) { return def; }
     },
     set(key, val) {
-      try { localStorage.setItem('hh_' + key, JSON.stringify(val)); } catch (e) {}
+      try { localStorage.setItem('hh_' + key, JSON.stringify(val)); return true; }
+      catch (e) { storageWarn(); return false; }   /* 配额满/隐私模式：不再静默失败 */
     },
     del(key) {
       try { localStorage.removeItem('hh_' + key); } catch (e) {}
     }
   };
+  /* 存储写入失败提示（每次会话只提示一次，避免刷屏；文案非惩罚性） */
+  let storageWarned = false;
+  function storageWarn() {
+    if (storageWarned) return;
+    storageWarned = true;
+    setTimeout(() => toast('本机空间不够啦，请家长在「家长中心」清理一下'), 0);
+  }
 
   const reduceMotion = !!(window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches);
   let muted = store.get('muted', false);
@@ -102,12 +110,26 @@ window.HH = (function () {
     const d = new Date();
     return d.getFullYear() + '-' + (d.getMonth() + 1) + '-' + d.getDate();
   }
+  /* 周键：以周一为一周起点。「本周收集」必须跨周归零，否则不是本周数据 */
+  function weekKey() {
+    const d = new Date();
+    d.setHours(0, 0, 0, 0);
+    d.setDate(d.getDate() - ((d.getDay() + 6) % 7));   /* 周一 = 0 */
+    return d.getFullYear() + '-' + (d.getMonth() + 1) + '-' + d.getDate();
+  }
   function getStars() { return store.get('stars', 0); }
+  function getWeekStars() {
+    const w = store.get('weekStars', null);
+    return (w && typeof w === 'object' && w.week === weekKey()) ? (w.n || 0) : 0;
+  }
   function addStars(n) {
     const s = getStars() + n;
     store.set('stars', s);
-    /* 本周与今日收集同步累计（只加不减） */
-    store.set('weekStars', store.get('weekStars', 0) + n);
+    /* 本周与今日收集同步累计（本周按周键自动归零，只加不减） */
+    const w = store.get('weekStars', null);
+    const cur = (w && typeof w === 'object' && w.week === weekKey()) ? w : { week: weekKey(), n: 0 };
+    cur.n = (cur.n || 0) + n;
+    store.set('weekStars', cur);
     const t = store.get('todayStars', { date: todayKey(), n: 0 });
     if (t.date !== todayKey()) { t.date = todayKey(); t.n = 0; }
     t.n += n;
@@ -134,14 +156,28 @@ window.HH = (function () {
     done[mod] = true;
     store.set('tasks', { date: todayKey(), done });
   }
-  /* 各模块通关进度（0–4） */
+  /* 各模块通关进度（0–4）——上限集中在此，页面不得各写一遍 */
+  const PROGRESS_MAX = 4;
+  const TREE_MAX_STAGE = 6;
+  const MODULES = ['pinyin', 'shengzi', 'langdu', 'jushi'];
   function getProgress(mod) { const p = store.get('progress', {}); return p[mod] || 0; }
   function addProgress(mod, max) {
     const p = store.get('progress', {});
     const before = p[mod] || 0;
-    p[mod] = Math.min(before + 1, max || 4);
+    p[mod] = Math.min(before + 1, max || PROGRESS_MAX);
     store.set('progress', p);
     return { before, after: p[mod] };
+  }
+  /* 成长树阶段：每完成 2 关 +1，上限 6；关数 = 各模块进度总和（单调递增） */
+  function syncTreeStage() {
+    const p = store.get('progress', {});
+    let totalDone = 0;
+    MODULES.forEach(m => { totalDone += (p[m] || 0); });
+    const prevStage = store.get('treeStage', 1);
+    const nowStage = Math.min(TREE_MAX_STAGE, 1 + Math.floor(totalDone / 2));
+    const grew = nowStage > prevStage;
+    if (grew) { store.set('treeStage', nowStage); store.set('treeGrew', true); }
+    return { prevStage: prevStage, nowStage: nowStage, grew: grew };
   }
 
   /* ================= 反馈提示条（琥珀 + 🔶，绝不报错） ================= */
@@ -155,29 +191,40 @@ window.HH = (function () {
     setTimeout(() => el.remove(), 2400);
   }
 
+  /* ================= 站内记账 record（不跳页） =================
+     拼音站/生字站的即时奖励用：只记星星/任务/进度/成长树，不做任何跳转。
+     记账逻辑与 gotoSettle 共用，避免两套口径。 */
+  function record(opt) {
+    opt = opt || {};
+    const n = opt.stars == null ? 0 : opt.stars;
+    if (n) addStars(n); else refreshStarUI();
+    if (opt.task) completeTask(opt.task);
+    const prog = opt.module ? addProgress(opt.module, opt.max) : null;
+    const stage = syncTreeStage();
+    return { stars: getStars(), progress: prog, stage: stage.nowStage };
+  }
+
   /* ================= 结算记账 gotoSettle（§7.4） =================
      关数/星星/任务/通关进度/成长树阶段/徽章 一次性在这里记账，
-     结算页只负责播动画——在结算页刷新不会重复得分。 */
+     结算页只负责播动画——在结算页刷新不会重复得分。
+     跳转前 400ms 内加锁：连点自评/答题不会重复记账或重复跳页。 */
+  const BADGE_NAME = { pinyin: '拼音小达人', shengzi: '识字小能手', langdu: '朗读小明星', jushi: '造句小诗人' };
+  const SETTLE_SAY = '今天的探险结束啦，小树又长高了一点。';   /* 与 jiesuan.js 的播报保持一致 */
+  let settling = false;
   function gotoSettle(opt) {
     opt = opt || {};
+    if (settling) return;                 /* 已在结算中：本次忽略 */
+    settling = true;
     const n = opt.stars == null ? 3 : opt.stars;
     addStars(n);
     if (opt.task) completeTask(opt.task);
-    const prog = opt.module ? addProgress(opt.module, 4) : null;
+    const prog = opt.module ? addProgress(opt.module, PROGRESS_MAX) : null;
+    const st = syncTreeStage();
+    const prevStage = st.prevStage, nowStage = st.nowStage, grew = st.grew;
 
-    /* 成长树阶段：每完成 2 关 +1，上限 6；关数 = 各模块进度总和（单调递增） */
-    const p = store.get('progress', {});
-    const totalDone = (p.pinyin || 0) + (p.shengzi || 0) + (p.langdu || 0) + (p.jushi || 0);
-    const prevStage = store.get('treeStage', 1);
-    const nowStage = Math.min(6, 1 + Math.floor(totalDone / 2));
-    const grew = nowStage > prevStage;
-    if (grew) store.set('treeStage', nowStage);
-    if (grew) store.set('treeGrew', true);
-
-    /* 本次新解锁的徽章：该模块进度恰好在本关达到 4/4 */
+    /* 本次新解锁的徽章：该模块进度恰好在本关达到满进度 */
     let badge = null;
-    const BADGE_NAME = { pinyin: '拼音小达人', shengzi: '识字小能手', langdu: '朗读小明星', jushi: '造句小诗人' };
-    if (prog && prog.before < 4 && prog.after >= 4 && BADGE_NAME[opt.module]) {
+    if (prog && prog.before < PROGRESS_MAX && prog.after >= PROGRESS_MAX && BADGE_NAME[opt.module]) {
       badge = { id: opt.module, name: BADGE_NAME[opt.module] };
     }
 
@@ -196,9 +243,11 @@ window.HH = (function () {
       readTitle: opt.readTitle || ''   /* 今天读了什么（家长报告用） */
     });
     /* 跳转结算页前预热结算语音（导航 400ms + 服务端合成在后台继续，
-       结算页开口时大概率已入缓存） */
+       结算页开口时大概率已入缓存）。
+       注意必须预热结算页真正会念的那句——以前预热的是 opt.say，
+       而 jiesuan.js 念的是固定的一句，等于每关都冷合成一次。 */
     if (window.HHTTS && window.HHTTS.prewarm) {
-      window.HHTTS.prewarm([opt.say, '太棒了！你完成了这一关！'].filter(Boolean));
+      window.HHTTS.prewarm([SETTLE_SAY, opt.say, '太棒了！你完成了这一关！'].filter(Boolean));
     }
     setTimeout(() => { location.href = 'jiesuan.html'; }, 400);
   }
@@ -259,8 +308,11 @@ window.HH = (function () {
     };
     setTimeout(prewarmDataSay, 600);
     /* 3) 拼音语音库全量预加载：官方录音包优先 → 本地库存 → 云端，
-          加载进内存后点击零网络请求 */
-    if (window.HHTTS && window.HHTTS.ensurePinyinBank) {
+          加载进内存后点击零网络请求。
+          只在拼音页触发——该库只服务拼音音节，其余页面跑一遍纯属浪费
+          （63 标注 × 四声 ≈ 273 条探测/事务，会把首屏 I/O 占满）。 */
+    if (/pinyin\.html$/.test(location.pathname) &&
+        window.HHTTS && window.HHTTS.ensurePinyinBank) {
       setTimeout(() => window.HHTTS.ensurePinyinBank(), 900);
     }
   }
@@ -319,11 +371,21 @@ window.HH = (function () {
     });
   }
 
-  /* ---------- PWA：Service Worker 注册（离线可用，仅 http/https 环境） ---------- */
+  /* ---------- PWA：Service Worker 注册 ----------
+     Service Worker 只在「安全上下文」可用：https / localhost / 127.0.0.1。
+     手机通过局域网 IP（http://192.168.x.x:8767）访问时不是安全上下文，
+     注册必然失败——以前这里 catch 后静默丢弃，导致「离线可用」实际不存在
+     却无人知晓。现在明确区分并打日志，便于排查。 */
   function registerSW() {
-    if ('serviceWorker' in navigator && location.protocol.indexOf('http') === 0) {
-      navigator.serviceWorker.register('sw.js').catch(() => {});
+    if (!('serviceWorker' in navigator)) return;
+    if (!window.isSecureContext) {
+      console.info('[汉字小星球] 当前不是安全上下文（局域网 http 访问），离线缓存功能不可用。' +
+                   '如需离线，请用 https 或从 127.0.0.1 访问。');
+      return;
     }
+    navigator.serviceWorker.register('sw.js').catch(e => {
+      console.warn('[汉字小星球] 离线缓存注册失败：', e && e.message);
+    });
   }
 
   document.addEventListener('DOMContentLoaded', bindCommon);
@@ -331,6 +393,7 @@ window.HH = (function () {
 
   /* ---------- 对外接口 ---------- */
   return { store, reduceMotion, speak, stopSpeak, sfx, toast, icon, injectIcons,
-           getStars, addStars, getTasks, completeTask, getProgress, addProgress,
+           getStars, addStars, getWeekStars, refreshStarUI, record,
+           getTasks, completeTask, getProgress, addProgress, PROGRESS_MAX, todayKey,
            gotoSettle };
 })();

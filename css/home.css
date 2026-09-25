@@ -16,6 +16,7 @@
 /* ---- 主列 ---- */
 .home-main{
   height:calc(100vh - 76px - 100px);
+  height:calc(100dvh - var(--topbar-h) - var(--navbar-h));   /* 移动端 100vh 含地址栏，会顶出屏外 */
   min-height:520px;
   display:flex; flex-direction:column;
   align-items:center; justify-content:flex-start;

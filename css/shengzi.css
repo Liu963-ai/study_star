@@ -9,6 +9,7 @@
   padding:10px 26px 120px;
   justify-content:center; align-items:flex-start;
   min-height:calc(100vh - 76px - 76px - 30px);
+  min-height:calc(100dvh - 76px - 76px - 30px);
 }
 
 /* ---- 左列：田字格 ---- */

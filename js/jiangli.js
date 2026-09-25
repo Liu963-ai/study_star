@@ -18,7 +18,7 @@
   ];
 
   function badgeEl(b) {
-    const earned = getProgress(b.mod) >= 4;
+    const earned = getProgress(b.mod) >= HH.PROGRESS_MAX;
     const el = document.createElement('div');
     el.className = 'badge ' + (earned ? 'earned' : 'locked');
     el.setAttribute('aria-label', b.name);
@@ -52,7 +52,7 @@
     el.querySelector('.shop-buy').addEventListener('click', () => {
       if (getStars() >= item.price) {
         store.set('stars', getStars() - item.price);
-        HH.addStars(0);                         /* 0 星刷新角标（refreshStarUI 未导出） */
+        HH.refreshStarUI();                     /* 只刷新角标数字，不再走 addStars(0) */
         /* 记录已兑换装饰：首页小树会把它挂到树枝上展示 */
         const owned = store.get('owned', []);
         if (owned.indexOf(item.id) < 0) owned.push(item.id);
@@ -66,8 +66,10 @@
     grid.appendChild(el);
   });
 
-  /* ---- 本周收集 ---- */
-  document.getElementById('weekN').textContent = store.get('weekStars', 36);
+  /* ---- 本周收集：按周键读取（跨周自动归零）。
+         以前读的是 hh_weekStars 裸值且默认 36，新用户一进奖励页就
+         凭空看到「本周收集 36」，而星星罐是 0，两处自相矛盾。 ---- */
+  document.getElementById('weekN').textContent = HH.getWeekStars();
 
   /* ---- 预热固定播报（兑换反馈），点击时秒播 ---- */
   if (window.HHTTS && window.HHTTS.prewarm) {

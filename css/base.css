@@ -15,7 +15,7 @@
   --c-langdu:      #F06292;   /* 朗读模块色 */
   --c-jiangli:     #FFD54F;   /* 奖励色 阳光黄 */
   --text:          #3E2723;   /* 文字主色 深棕 */
-  --text-soft:     #8A6F5C;   /* 次级文字 */
+  --text-soft:     #7A5F4C;   /* 次级文字（原 #8A6F5C 在暖白底上仅 4.45:1） */
   --ok:            #66BB6A;   /* 正确反馈 */
   --retry:         #FFB300;   /* 再试反馈 琥珀 */
   --card:          #FFFDF8;   /* 卡片白底 */
@@ -30,8 +30,30 @@
   /* 页面内指定的派生色（任务书 §6.5/§6.6 点名使用的颜色） */
   --path-dot:      #E3D3B8;   /* 地图路径米色圆点 */
   --shengzi-deep:  #33691E;   /* 生字当前笔画 深绿 */
-  --langdu-read:   #B8A79A;   /* 朗读已读字 */
+  --langdu-read:   #7A6353;   /* 朗读已读字（原 #B8A79A 对比度仅 2.29:1） */
   --langdu-hl:     #FFF3D6;   /* 朗读当前字底色 */
+
+  /* ---------- 可读性（ink）色：模块色本身是浅色（#4FC3F7 / #81C784 /
+     #FF8A3D），白字压在上面只有 2.0–2.35:1，远低于 WCAG AA 的 4.5:1。
+     这些 ink 色用于「浅色底上的彩色文字 / 彩色按钮上的文字」，
+     模块主色仍用于背景与描边，不改动任务书 §3.1 的原色值。 ---------- */
+  --c-pinyin-ink:  #0B6E9E;
+  --c-shengzi-ink: #2E6B31;
+  --c-langdu-ink:  #B3265B;
+  --primary-ink:   #B35400;
+  --c-jiangli-ink: #6B4A00;
+
+  /* ---------- 布局尺寸令牌（改一处即可全局生效） ---------- */
+  --topbar-h:      76px;      /* 顶栏 / 学习页状态条高度 */
+  --navbar-h:      100px;     /* 底部导航高度（不含 iOS 安全区） */
+
+  /* ---------- 层级（z-index）统一分层，避免同值不同语义 ---------- */
+  --z-topbar:      5;
+  --z-nav:         10;
+  --z-drag:        40;
+  --z-overlay:     50;
+  --z-modal:       60;
+  --z-toast:       70;
 
   /* ---------- 形状与阴影（任务书 §3.2） ---------- */
   --radius-card:   20px;
@@ -70,11 +92,11 @@ img,video,svg{ display:block; }
 
 /* ---------- 顶部状态条（高度 <15%） ---------- */
 .topbar{
-  height:76px; padding:8px 24px;
+  height:var(--topbar-h); padding:8px 24px;
   display:flex; align-items:center; gap:16px;
   background:rgba(255,249,240,.92);
   border-bottom:1px solid rgba(62,39,35,.08);
-  position:relative; z-index:5;
+  position:relative; z-index:var(--z-topbar);
 }
 .topbar-space{ flex:1; }
 /* 星星罐胶囊：阳光黄底 + ⭐ + 数字 */
@@ -109,12 +131,12 @@ img,video,svg{ display:block; }
 /* ---------- 底部导航：100px，5 个 SVG 线性图标，无文字 ---------- */
 .navbar{
   position:fixed; left:0; right:0; bottom:0;
-  height:100px; max-width:1024px; margin:0 auto;
+  height:var(--navbar-h); max-width:1024px; margin:0 auto;
   background:rgba(255,249,240,.95);
   border-top:1px solid rgba(62,39,35,.08);
   box-shadow:0 -6px 20px rgba(0,0,0,.04);
   display:flex; align-items:center; justify-content:space-around;
-  padding:0 6vw; z-index:10;
+  padding:0 6vw; z-index:var(--z-nav);
 }
 .nav-btn{
   width:76px; height:76px; border-radius:50%;
@@ -195,7 +217,7 @@ img,video,svg{ display:block; }
   padding:14px 28px; font-size:24px; font-weight:bold;
   box-shadow:var(--shadow-soft);
   display:flex; align-items:center; gap:10px;
-  z-index:60; animation:toastIn .25s ease-out;
+  z-index:var(--z-toast); animation:toastIn .25s ease-out;   /* 必须高于答题卡(z:60)，否则提示被遮住 */
 }
 @keyframes toastIn{ from{ transform:translate(-50%,16px); opacity:0; } }
 

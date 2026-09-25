@@ -14,26 +14,32 @@
   const $ = id => document.getElementById(id);
   const stage = $('mapStage'), train = $('train');
 
-  const TOTAL = 10;
   /* 节点坐标（百分比），大致沿既有虚线路径 */
   const NODE_XY = [
     [14, 72], [23, 50], [31, 43], [40, 47], [47, 57],
     [54, 58], [60, 42], [67, 35], [76, 40], [88, 58]
   ];
-  /* 每关的题型池（由易到难） */
+  const TOTAL = NODE_XY.length;      /* 关数由坐标表派生：加一关只需加一行坐标 */
+  /* 每关的题型池（由易到难）；关数超过池长度时取模复用 */
   const LEVEL_TYPES = [
     ['emoji'], ['sound'], ['emoji', 'sound'],
     ['char2py'], ['py2char'], ['sound', 'char2py'],
     ['py2char', 'emoji'], ['char2py', 'sound'],
     ['py2char', 'char2py'], ['poem']
   ];
+  function typesOf(n) { return LEVEL_TYPES[(n - 1) % LEVEL_TYPES.length]; }
 
   let level = Math.min(Math.max(store.get('mapLevel', 1), 1), TOTAL);   /* 当前关卡 */
 
   /* ================= 题库生成 ================= */
   function rnd(arr) { return arr[Math.floor(Math.random() * arr.length)]; }
-  function pickOthers(arr, exclude, n) {
-    const pool = arr.filter(x => x !== exclude);
+  /* 取 n 个干扰项。sameKey 用来排除「与正确答案同值」的项——
+     否则同音字（十/石 shí、力/立 lì…）会生成两个一模一样的选项，
+     而且两个都被判正确，题面自相矛盾。 */
+  function pickOthers(arr, exclude, n, sameKey) {
+    const key = sameKey || (x => x);
+    const eq = key(exclude);
+    const pool = arr.filter(x => x !== exclude && key(x) !== eq);
     const out = [];
     while (out.length < n && pool.length) {
       out.push(pool.splice(Math.floor(Math.random() * pool.length), 1)[0]);
@@ -75,19 +81,25 @@
       };
     }
     if (type === 'sound') {
+      /* 选项是「声母字母」，每个选项点下去要念它自己的呼读音。
+         以前 speak 恒等于正确答案的呼读音（it.read），而且干扰项直接
+         把 {p,read,chars} 对象塞进 label —— 界面上显示两个 [object Object]，
+         点错还会听到正确答案的读音，属于反向教学。 */
       const it = rnd(SHENGMU);
-      const others = pickOthers(SHENGMU, it.p, 2);
+      const others = pickOthers(SHENGMU, it, 2, x => x.p);
       return {
         big: '🔊',
         bigCls: 'emoji',
         say: '听一听，是哪个声母？' + it.read,
         autoSayDelay: 500,
-        opts: shuffle([it.p, ...others]).map(p => ({ label: p, right: p === it.p, speak: it.read }))
+        opts: shuffle([it, ...others]).map(o => ({
+          label: o.p, right: o.p === it.p, speak: o.read
+        }))
       };
     }
     if (type === 'char2py') {
       const it = rnd(SZ);
-      const others = pickOthers(SZ, it, 2).map(x => x.py);
+      const others = pickOthers(SZ, it, 2, x => x.py).map(x => x.py);
       return {
         big: it.char,
         bigCls: 'hanzi',
@@ -97,7 +109,9 @@
     }
     if (type === 'py2char') {
       const it = rnd(PY_CHARS);
-      const others = pickOthers(PY_CHARS.filter(x => x.py !== it.py), it, 2).map(x => x.c);
+      /* 排除同音的字（否则「哪个字读 yī？」会出现两个正确选项），
+         同时排除同一个字（同一字可能出现在多个分组） */
+      const others = pickOthers(PY_CHARS.filter(x => x.py !== it.py), it, 2, x => x.c).map(x => x.c);
       return {
         big: it.py,
         bigCls: 'pinyin',
@@ -107,7 +121,7 @@
     }
     /* poem：诗句出处 */
     const t = rnd(DATA.langdu.list);
-    const others = pickOthers(DATA.langdu.list, t, 2);
+    const others = pickOthers(DATA.langdu.list, t, 2, x => x.title);
     const frag = t.text.replace(/[，。！？、：“”]/g, '').slice(0, 6);
     return {
       big: frag + '……',
@@ -140,9 +154,14 @@
       const n = i + 1;
       el.classList.remove('done', 'current', 'locked');
       el.querySelector('.node-star').classList.toggle('hidden', n >= level);
-      if (n < level) el.classList.add('done');
-      else if (n === level) el.classList.add('current');
-      else el.classList.add('locked');
+      let stateCn;
+      if (n < level) { el.classList.add('done'); stateCn = '已通关'; }
+      else if (n === level) { el.classList.add('current'); stateCn = '当前关卡'; }
+      else { el.classList.add('locked'); stateCn = '还没有解锁'; }
+      /* 状态不只靠颜色：读屏与色觉障碍用户也能分辨 */
+      el.setAttribute('aria-label', '第' + n + '关，' + stateCn);
+      if (n === level) el.setAttribute('aria-current', 'step');
+      else el.removeAttribute('aria-current');
     });
     const xy = NODE_XY[level - 1];
     train.style.left = xy[0] + '%';
@@ -174,8 +193,7 @@
   function openQuest(n) {
     curLevel = n;
     answered = false;
-    const types = LEVEL_TYPES[n - 1];
-    curQ = buildQuestion(rnd(types));
+    curQ = buildQuestion(rnd(typesOf(n)));
     $('questLevel').textContent = '第 ' + n + ' 关';
     const ask = $('questAsk');
     ask.innerHTML = '';
@@ -193,7 +211,9 @@
       opts.appendChild(b);
     });
     quest.classList.remove('hidden');
-    setTimeout(() => speak(curQ.say), 350);
+    /* autoSayDelay：题干音频的延迟（听音题需要稍等遮罩动画再出声）——
+       此前这个字段被声明却从未生效，一律写死 350ms */
+    setTimeout(() => speak(curQ.say), curQ.autoSayDelay || 350);
     /* 预热题目与选项语音（答对/答错反馈也提前合成） */
     if (window.HHTTS && window.HHTTS.prewarm) {
       window.HHTTS.prewarm([curQ.say,

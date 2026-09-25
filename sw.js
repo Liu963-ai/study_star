@@ -11,7 +11,7 @@
        任一代码文件变更时由版本号 VER 触发旧缓存整体清理）
    · 跨域请求（127.0.0.1:7860 的 TTS/LLM）→ 不拦截，直接放行网络
    ============================================================ */
-const VER = 'hh-v16';  /* v14 限流即时反馈；v16 统一发音人(小艺)+拼音标准标注+语音库持久化+官方录音包接入+首页小树优化 */
+const VER = 'hh-v17';  /* v17 教育质量优化：首屏体积/WCAG对比度/学习记账/缺陷修复（详见 项目说明书.md §12） */
 const CORE = [
   'index.html', 'home.html', 'ditu.html', 'pinyin.html', 'shengzi.html',
   'langdu.html', 'jushi.html', 'jiangli.html', 'jiesuan.html',
@@ -26,9 +26,13 @@ const CORE = [
   'js/langdu.js', 'js/jushi.js', 'js/jiangli.js', 'js/jiesuan.js',
   'js/parent.js', 'js/jiaocai.js',
   'js/tree-motion.js', 'js/tree-motion-data.js',
-  'assets/lib/pdf.min.js', 'assets/lib/pdf.worker.min.js',
-  'assets/lib/pinyin-pro.min.js', 'assets/lib/hanzi-writer.min.js',
+  /* 注意：pdf.js（1.41MB）与 pinyin-pro（0.32MB）不在预缓存清单里。
+     它们只服务低频场景（家长导入 PDF / 拼音标注），且首次使用时会被
+     下面「其余静态资源」分支自动收进缓存——放进安装期预缓存会让每个
+     用户首访多下 1.7MB（占原预缓存总量的 83%）。 */
+  'assets/lib/hanzi-writer.min.js',
   'assets/icons/icon-192.png', 'assets/icons/icon-512.png',
+  'assets/icons/icon-maskable-512.png',
   'manifest.json'
 ];
 
@@ -57,7 +61,6 @@ self.addEventListener('fetch', e => {
   if (e.request.method !== 'GET') return;
   if (url.origin !== location.origin) return;          /* TTS/LLM 服务：放行 */
 
-  const p = url.pathname.split('/').pop();
   const isLazy =
     url.pathname.includes('/assets/hanzi-data/') ||    /* 笔顺数据：按字惰性缓存 */
     url.pathname.includes('/assets/planets/');         /* 吉祥物视频：按需缓存 */
@@ -69,7 +72,12 @@ self.addEventListener('fetch', e => {
         cache.match(e.request).then(hit =>
           hit ||
           fetch(e.request).then(resp => {
-            if (resp.ok) cache.put(e.request, resp.clone());
+            /* 只缓存完整响应：206（Range 分段）会被 Cache API 直接拒绝，
+               而 <video> 播放器必然发 Range 请求，不判断会刷出未捕获的
+               TypeError 并可能让视频请求整体失败 */
+            if (resp.ok && resp.status === 200) {
+              cache.put(e.request, resp.clone()).catch(() => {});
+            }
             return resp;
           })
         )
@@ -82,9 +90,15 @@ self.addEventListener('fetch', e => {
   if (e.request.mode === 'navigate') {
     e.respondWith(
       fetch(e.request).then(resp => {
-        caches.open(VER).then(c => c.put(e.request, resp.clone()));
+        if (resp.ok && resp.status === 200) {
+          caches.open(VER).then(c => c.put(e.request, resp.clone())).catch(() => {});
+        }
         return resp;
-      }).catch(() => caches.match(e.request).then(h => h || caches.match('index.html')))
+      }).catch(() =>
+        caches.match(e.request)
+          .then(h => h || caches.match('index.html'))
+          .then(r => r || new Response('离线可用内容缺失', { status: 503 }))
+      )
     );
     return;
   }
@@ -94,10 +108,14 @@ self.addEventListener('fetch', e => {
     caches.open(VER).then(cache =>
       cache.match(e.request).then(hit => {
         const net = fetch(e.request).then(resp => {
-          if (resp.ok) cache.put(e.request, resp.clone());
+          if (resp.ok && resp.status === 200) {
+            cache.put(e.request, resp.clone()).catch(() => {});
+          }
           return resp;
         }).catch(() => hit);
-        return hit || net;
+        /* 必须保证 respondWith 拿到一个真实响应：
+           缓存未命中且网络失败时若返回 undefined，该请求会以 TypeError 失败 */
+        return hit || net.then(r => r || new Response('', { status: 504 }));
       })
     )
   );

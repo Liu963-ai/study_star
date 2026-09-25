@@ -34,7 +34,7 @@ _assert_allowed()
 
 VOICE = "zh-CN-XiaoyiNeural"      # 用户当前所选音色
 RATE = -5                          # 默认语速档
-CONC = 3
+CONC = 1                           # 上游限流期降为单并发温和续跑（缓存命中秒过，断点可续）
 
 corpus = json.load(open(r"D:\ZCODE\汉字小星球\tools\prewarm_corpus.json", encoding="utf-8"))
 texts = corpus["texts"]

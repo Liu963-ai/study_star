@@ -82,6 +82,15 @@ window.HHTTS = (function () {
 
   /* ---- 服务可用性探测（结果缓存 30s，失败自动降级） ---- */
   let avail = null, availAt = 0;
+  /* 最近一次服务失败时刻：跨页面持久化（localStorage）——
+     90s 内任何页面的未缓存文本直接走备用声，保证即时反馈 */
+  function lastFailAt() {
+    try { return parseInt(localStorage.getItem('hh_ttsFailAt'), 10) || 0; }
+    catch (e) { return 0; }
+  }
+  function setFailAt(ms) {
+    try { localStorage.setItem('hh_ttsFailAt', String(ms)); } catch (e) {}
+  }
   async function ping() {
     if (avail !== null && Date.now() - availAt < 30000) return avail;
     try {
@@ -94,7 +103,8 @@ window.HHTTS = (function () {
     availAt = Date.now();
     return avail;
   }
-  function markDown() { avail = false; availAt = Date.now(); }
+  function markDown() { avail = false; availAt = Date.now(); setFailAt(Date.now()); }
+  function markUp() { setFailAt(0); }
 
   /* ---- 朗读会话管理：新朗读顶替旧朗读（与原 HH.speak 行为一致） ---- */
   let seq = 0, curAudio = null, curAbort = null;
@@ -133,7 +143,7 @@ window.HHTTS = (function () {
       for (let i = 0; i < 2; i++) {
         try {
           const ctrl = new AbortController();
-          const timer = setTimeout(() => ctrl.abort(), 8000);
+          const timer = setTimeout(() => ctrl.abort(), 4500);   /* 云端限流/卡顿时快速回落备用声音 */
           res = await fetch(TTS_BASE + '/tts', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
@@ -150,7 +160,11 @@ window.HHTTS = (function () {
         await new Promise(r => setTimeout(r, 350));   /* 退避后重试 */
       }
       pending.delete(key);
-      if (!res || !res.ok) throw (lastErr || new Error('tts-fail'));
+      if (!res || !res.ok) {
+        setFailAt(Date.now());                   /* 失败证据跨页面生效：下一页直接走快速通道 */
+        throw (lastErr || new Error('tts-fail'));
+      }
+      setFailAt(0);                              /* 成功＝服务恢复 */
       const url = URL.createObjectURL(await res.blob());
       mem.set(key, url);
       if (mem.size > 60) {                   /* 内存缓存上限，防长会话膨胀 */
@@ -221,20 +235,37 @@ window.HHTTS = (function () {
   }
 
   /* ---- 请求合成并播放；任何失败走 fallback（浏览器 TTS），不阻塞 ----
-     opt.voiceId：临时试听指定音色（语音设置弹窗用），不影响已存设置 */
+     opt.voiceId：临时试听指定音色（语音设置弹窗用），不影响已存设置
+     即时反馈保证：
+     · 已缓存（内存/磁盘）→ 高质量音色毫秒级播放
+     · 未缓存但服务健康   → 服务器合成（点击插队，最长 4.5s）
+     · 服务限流/故障期    → 立即用本机备用声音即时播报（90s 失败记忆期），
+       同时后台继续补拉高质量音频，恢复后自动升级音质 */
   function speak(text, opt, fallback) {
     opt = opt || {};
     const my = ++seq;
     if (curAbort) { try { curAbort.abort(); } catch (e) {} curAbort = null; }
     if (curAudio) { curAudio.pause(); curAudio = null; }
 
+    const textS = String(text);
+    const s = getSettings();
+    const voice = (opt.voiceId && VOICES.some(v => v.id === opt.voiceId)) ? opt.voiceId : s.voice;
+    const rate = effRate(s, opt), pitch = effPitch(s);
+    const key = keyFor(textS, voice, rate, pitch);
+    const cached = mem.get(key);
+
+    /* 限流/故障期（90s 内有过失败，跨页面记忆）且未缓存：立即备用声音 */
+    if (!cached && Date.now() - lastFailAt() < 90000) {
+      fallback(textS, opt);
+      getUrl(textS, voice, rate, pitch, 0).then(() => markUp()).catch(() => {});   /* 后台补拉 */
+      return { cancel: stop };
+    }
+
     (async () => {
       try {
         if (await ping() === false) throw new Error('tts-down');
-        const s = getSettings();
-        const voice = (opt.voiceId && VOICES.some(v => v.id === opt.voiceId)) ? opt.voiceId : s.voice;
-        const rate = effRate(s, opt), pitch = effPitch(s);
-        const url = await getUrl(String(text), voice, rate, pitch, 1);
+        const url = await getUrl(textS, voice, rate, pitch, 1);
+        markUp();
         if (my !== seq) return;                  /* 已被新朗读顶替 */
         const audio = new Audio(url);
         curAudio = audio;

@@ -122,8 +122,9 @@ window.HHTTS = (function () {
     return [text, voice, rate, pitch].join('|');
   }
 
-  /* ---- 取音频 url：内存命中秒回；合成中并发去重；失败重试一次 ---- */
-  function getUrl(text, voice, rate, pitch) {
+  /* ---- 取音频 url：内存命中秒回；合成中并发去重；失败重试一次 ----
+     prio：1=点击朗读（服务端插队），0=预热（让位给点击） */
+  function getUrl(text, voice, rate, pitch, prio) {
     const key = keyFor(text, voice, rate, pitch);
     if (mem.has(key)) return Promise.resolve(mem.get(key));
     if (pending.has(key)) return pending.get(key);
@@ -136,7 +137,7 @@ window.HHTTS = (function () {
           res = await fetch(TTS_BASE + '/tts', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ text: text, voice: voice, rate: rate, pitch: pitch }),
+            body: JSON.stringify({ text: text, voice: voice, rate: rate, pitch: pitch, prio: prio || 0 }),
             signal: ctrl.signal
           });
           clearTimeout(timer);
@@ -173,13 +174,18 @@ window.HHTTS = (function () {
     const voice = (opt.voiceId && VOICES.some(v => v.id === opt.voiceId)) ? opt.voiceId : s.voice;
     const rate = effRate(s, opt);
     const list = [...new Set((texts || []).filter(Boolean).map(String))].slice(0, 40);
-    let done = 0;
-    for (const t of list) {
-      try {
-        await getUrl(t, voice, rate, s.pitch);
-        done++;
-      } catch (e) { /* 预热失败静默，点击时仍可现场合成/降级 */ }
-    }
+    let done = 0, i = 0;
+    /* 3 路并发预热（服务端 4 路并行 + 点击可插队），铺满缓存更快 */
+    const worker = async () => {
+      while (i < list.length) {
+        const t = list[i++];
+        try {
+          await getUrl(t, voice, rate, s.pitch, 0);
+          done++;
+        } catch (e) { /* 预热失败静默，点击时仍可现场合成/降级 */ }
+      }
+    };
+    await Promise.all([worker(), worker(), worker()]);
     return done;
   }
 
@@ -228,7 +234,7 @@ window.HHTTS = (function () {
         const s = getSettings();
         const voice = (opt.voiceId && VOICES.some(v => v.id === opt.voiceId)) ? opt.voiceId : s.voice;
         const rate = effRate(s, opt), pitch = effPitch(s);
-        const url = await getUrl(String(text), voice, rate, pitch);
+        const url = await getUrl(String(text), voice, rate, pitch, 1);
         if (my !== seq) return;                  /* 已被新朗读顶替 */
         const audio = new Audio(url);
         curAudio = audio;

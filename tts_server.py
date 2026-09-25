@@ -12,6 +12,7 @@ tts_server.py —— 本地语音合成服务（edge-tts → mp3，带磁盘缓�
 """
 import asyncio
 import hashlib
+import heapq
 import json
 import re
 import threading
@@ -93,8 +94,57 @@ def _key_lock(key):
         return _KEY_LOCKS[key]
 
 
-# 云端合成并发上限（edge-tts 上游温和限流）
-SYNTH_SEM = threading.BoundedSemaphore(2)
+# ---- 合成优先级调度器 ----
+# 4 个工作线程；点击朗读（prio=1）随时插队，预热（prio=0）最多占 2 路，
+# 始终保留 2 路空余——孩子点击新内容时无需等待预热队列，立即开始合成。
+class _PriorityScheduler:
+    def __init__(self, workers=4, low_slots=2):
+        self._cv = threading.Condition()
+        self._heap = []          # (-prio, seq, fn)
+        self._seq = 0
+        self._active_low = 0     # 正在执行的预热数
+        self._low_slots = low_slots
+        for _ in range(workers):
+            threading.Thread(target=self._worker, daemon=True).start()
+
+    def submit(self, prio, fn):
+        with self._cv:
+            self._seq += 1
+            heapq.heappush(self._heap, (-prio, self._seq, (prio, fn)))
+            self._cv.notify_all()
+
+    def _worker(self):
+        while True:
+            with self._cv:
+                while True:
+                    if not self._heap:
+                        self._cv.wait()
+                        continue
+                    # 挑选可执行的最高优先级任务：
+                    #   prio>=1 永远可执行；prio=0 受 low_slots 限制（给点击留通道）
+                    pick = None
+                    for i, (_, _, (prio, fn)) in enumerate(self._heap):
+                        if prio >= 1 or self._active_low < self._low_slots:
+                            pick = (i, prio, fn)
+                            break
+                    if pick is None:
+                        self._cv.wait()          # 只有预热在排队且已占满低优先通道
+                        continue
+                    i, prio, fn = pick
+                    self._heap.pop(i)
+                    if prio < 1:
+                        self._active_low += 1
+                    break
+            try:
+                fn()
+            finally:
+                with self._cv:
+                    if prio < 1:
+                        self._active_low -= 1
+                    self._cv.notify_all()
+
+
+_SCHED = _PriorityScheduler(4, low_slots=2)
 
 
 def synth_to_file(text, voice, rate, pitch, path):
@@ -265,21 +315,39 @@ class Handler(BaseHTTPRequestHandler):
                 return
             path = CACHE_DIR + "/" + key + ".wav"
 
-            # ---- 相同内容命中缓存，不重复合成（每 key 一把锁：
-            #      同 key 请求合并等待，不同 key 互不阻塞；
-            #      一条云端卡死由 synth_to_file 的 40s 硬超时兜底，
-            #      不会再拖死整站语音） ----
+            # ---- 优先级：点击朗读 prio=1（插队），预热 prio=0 ----
+            prio = 1 if int(data.get("prio", 0)) >= 1 else 0
+
+            # ---- 相同内容命中缓存直接返回；未命中交给调度器合成 ----
+            #      · 每 key 一把锁：同 key 请求合并等待
+            #      · 4 路并行消费，点击任务插队在预热任务之前
+            #      · 单条云端卡死由 synth_to_file 的 40s 硬超时兜底
             import os
-            with _key_lock(key):
-                if not os.path.exists(path):
-                    os.makedirs(CACHE_DIR, exist_ok=True)
-                    tmp = path + ".part"
-                    with SYNTH_SEM:               # 限制云端并发，防打满上游
-                        synth_to_file(text, voice,
-                                      ("+" if rate >= 0 else "") + str(rate) + "%",
-                                      ("+" if pitch >= 0 else "") + str(pitch) + "Hz",
-                                      tmp)
-                    os.replace(tmp, path)
+            if not os.path.exists(path):
+                done = threading.Event()
+
+                def job():
+                    try:
+                        with _key_lock(key):
+                            if not os.path.exists(path):
+                                os.makedirs(CACHE_DIR, exist_ok=True)
+                                tmp = path + ".part"
+                                synth_to_file(text, voice,
+                                              ("+" if rate >= 0 else "") + str(rate) + "%",
+                                              ("+" if pitch >= 0 else "") + str(pitch) + "Hz",
+                                              tmp)
+                                os.replace(tmp, path)
+                    finally:
+                        done.set()
+
+                _SCHED.submit(prio, job)
+                if not done.wait(timeout=60):
+                    self._json(504, {"ok": False, "msg": "synth timeout"})
+                    return
+
+            if not os.path.exists(path):
+                self._json(500, {"ok": False, "msg": "synth failed"})
+                return
 
             with open(path, "rb") as f:
                 audio = f.read()

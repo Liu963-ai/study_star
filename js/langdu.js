@@ -289,5 +289,14 @@
 
   /* ---- 启动：先渲染第一篇第一句（修复打开空白），并自动听一遍 ---- */
   render();
+  /* 注册预热：换音色/语速后自动重新预热当前课文（慢速开启则含慢速变体） */
+  if (window.HHTTS && window.HHTTS.addPrewarmer) {
+    window.HHTTS.addPrewarmer(() => {
+      if (!(window.HHTTS && window.HHTTS.prewarm)) return;
+      const sents = TEXTS[textIdx].segs.map(s => s.map(w => w.ch).join('')).slice(0, 8);
+      window.HHTTS.prewarm(sents);
+      if (slow) window.HHTTS.prewarm(sents, { rate: 0.8 });
+    });
+  }
   setTimeout(() => speak('欢迎来到朗读剧场，我们先听一听', { onend: playSentence }), 400);
 })();

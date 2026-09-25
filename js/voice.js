@@ -104,9 +104,11 @@ window.HHVoice = (function () {
     box.classList.remove('hidden');
     paint();
     paintStatus();
-    /* 预热试听句（当前音色），点「试听」秒播 */
+    /* 预热全部音色的试听句：点任何「试听」都秒播 */
     if (window.HHTTS && window.HHTTS.prewarm) {
-      window.HHTTS.prewarm(['你好呀，我是你的学习伙伴！']);
+      HHTTS.VOICES.forEach(v => {
+        window.HHTTS.prewarm(['你好呀，我是你的学习伙伴！'], { voiceId: v.id });
+      });
     }
   }
   function close() {

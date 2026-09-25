@@ -152,6 +152,15 @@
       window.HHTTS.prewarm(['先通过第' + level + '关，小火车才能开到这里']);
     }
   }
+  /* 注册预热：换音色/语速后自动重新预热地图播报 */
+  if (window.HHTTS && window.HHTTS.addPrewarmer) {
+    window.HHTTS.addPrewarmer(() => {
+      if (!(window.HHTTS && window.HHTTS.prewarm)) return;
+      window.HHTTS.prewarm(['先通过第' + level + '关，小火车才能开到这里',
+        '欢迎来到闯关地图，点击发光的关卡，答对题目小火车就出发！',
+        '答对啦！小火车出发喽', '再想一想']);
+    });
+  }
 
   function onNode(n) {
     if (n > level) { speak('先通过第' + level + '关，小火车才能开到这里'); return; }

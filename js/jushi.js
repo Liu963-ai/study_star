@@ -65,6 +65,18 @@
       window.HHTTS.prewarm([...combos, '再拼一句']);
     }
   }
+  /* 注册预热：换音色/语速后自动重新预热当前轮 */
+  if (window.HHTTS && window.HHTTS.addPrewarmer) {
+    window.HHTTS.addPrewarmer(() => renderTrayPrewarmOnly());
+  }
+  function renderTrayPrewarmOnly() {
+    if (!(window.HHTTS && window.HHTTS.prewarm)) return;
+    const r = round;
+    const combos = [];
+    ROUNDS[r].who.forEach(w => ROUNDS[r].where.forEach(s => ROUNDS[r].what.forEach(a =>
+      combos.push(w[0] + s[0] + a[0]))));
+    window.HHTTS.prewarm([...combos, '再拼一句']);
+  }
 
   /* ---- 清空三个凹槽 ---- */
   function clearSlots() {

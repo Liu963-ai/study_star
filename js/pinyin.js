@@ -48,7 +48,7 @@
       prewarmTexts([it.say, it.char, ...(it.words || [])]);
       return;
     }
-    /* 延迟 1.5s：让当前点击的呼读音优先合成，再做四声与组字词预热 */
+    /* 延迟 300ms：让当前点击的呼读音优先合成，再做四声与组字词预热 */
     setTimeout(() => {
       const tones = toneList();
       prewarmTexts([
@@ -332,6 +332,16 @@
     btn.addEventListener('pointerleave', () => { if (pressing) pressEnd(); });
     btn.addEventListener('pointercancel', pressEnd);
   });
+
+  /* ---- 全页预热：当前内容优先，其次整组呼读音；
+     注册到 HHTTS，换音色/语速后自动重新预热 ---- */
+  function prewarmAll() {
+    prewarmCurrent();
+    prewarmGroup();
+  }
+  if (window.HHTTS && window.HHTTS.addPrewarmer) {
+    window.HHTTS.addPrewarmer(prewarmAll);
+  }
 
   /* ---- 进入页面：先引导，再读当前拼音（呼读音） ---- */
   paint();

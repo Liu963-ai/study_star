@@ -214,7 +214,11 @@
     else beginTimer = setTimeout(begin, 2800);   /* 读音约 2s 播完即开画，不因 TTS 慢而久等 */
 
     /* 预热本字与下一个字的全部语音（导语/组词/笔画名），点击与切换秒播 */
-    if (window.HHTTS && window.HHTTS.prewarm) {
+    prewarmCurrentChar();
+
+    /* 预热本字其余语音：组词、各笔画名（后台合成，演示时秒播） */
+    function prewarmCurrentChar() {
+      if (!(window.HHTTS && window.HHTTS.prewarm)) return;
       const strokeTexts = [];
       const total = it.strokes ? it.strokes.length : 0;
       for (let i = 0; i < total; i++) {
@@ -293,4 +297,17 @@
 
   /* ---- 启动 ---- */
   loadChar();
+  /* 注册预热：换音色/语速后自动重新预热当前字 */
+  if (window.HHTTS && window.HHTTS.addPrewarmer) {
+    window.HHTTS.addPrewarmer(() => loadCharPrewarmOnly());
+  }
+  function loadCharPrewarmOnly() {
+    const it = ITEMS[ci];
+    if (!it || !(window.HHTTS && window.HHTTS.prewarm)) return;
+    const strokeTexts = (it.strokes || []).map((s, i) => '第' + (i + 1) + '笔，' + (s.name || ''));
+    const introOf = c => c.char + (c.pinyin ? '，' + c.pinyin : '') + '。看老师写一遍';
+    const nxt = ITEMS[(ci + 1) % ITEMS.length];
+    window.HHTTS.prewarm([introOf(it), introOf(nxt), it.char, nxt.char,
+      ...(it.words || []), ...strokeTexts]);
+  }
 })();

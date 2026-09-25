@@ -249,15 +249,17 @@ window.HH = (function () {
           并把排队中的自动播报补播出来 */
     const unlock = () => { if (window.HHTTS && window.HHTTS.unlockAudio) window.HHTTS.unlockAudio(); };
     document.addEventListener('pointerdown', unlock, { once: true, capture: true });
-    /* 2) 页面加载后预热：把本页所有 [data-say] 点击文案提前合成进缓存，
-          孩子点击图标时秒播（预热在后台进行，不阻塞页面） */
-    setTimeout(() => {
+    /* 2) 预热本页所有 [data-say] 点击文案：孩子点击图标时秒播。
+       注册为可重入函数——换音色/语速后由 HHTTS 自动重新预热 */
+    const prewarmDataSay = () => {
       if (!window.HHTTS || !window.HHTTS.prewarm) return;
       const texts = [...new Set(
         [...document.querySelectorAll('[data-say]')].map(e => e.getAttribute('data-say'))
       )];
       if (texts.length) window.HHTTS.prewarm(texts);
-    }, 600);
+    };
+    if (window.HHTTS && window.HHTTS.addPrewarmer) window.HHTTS.addPrewarmer(prewarmDataSay);
+    setTimeout(prewarmDataSay, 600);
   }
 
   /* ================= 通用绑定 ================= */

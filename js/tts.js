@@ -56,9 +56,27 @@ window.HHTTS = (function () {
       pitch: PITCHES.some(p => p.v === s.pitch) ? s.pitch : DEF.pitch
     };
   }
+  /* ---- 预热注册表：各页注册自己的预热函数，
+     音色/语速/音调一变，缓存键全部变化——自动触发全站重新预热，
+     避免「换音色后每次点击都要现场合成 2 秒」 ---- */
+  const prewarmers = new Set();
+  function addPrewarmer(fn) {
+    if (typeof fn === 'function') prewarmers.add(fn);
+  }
+  function runPrewarmers() {
+    setTimeout(() => {
+      prewarmers.forEach(fn => { try { fn(); } catch (e) {} });
+    }, 400);
+  }
+
   function setSettings(patch) {
-    const s = Object.assign(getSettings(), patch || {});
+    const before = getSettings();
+    const s = Object.assign(before, patch || {});
     localStorage.setItem('hh_voice', JSON.stringify(s));
+    /* 声音参数变化 → 缓存键全变 → 触发各页重新预热 */
+    if (s.voice !== before.voice || s.rate !== before.rate || s.pitch !== before.pitch) {
+      runPrewarmers();
+    }
     return s;
   }
 
@@ -239,7 +257,7 @@ window.HHTTS = (function () {
 
   /* 对外接口 */
   return { speak: speak, stop: stop, ping: ping, prewarm: prewarm, unlockAudio: unlockAudio,
-           pinyinVoiceId: pinyinVoiceId,
+           pinyinVoiceId: pinyinVoiceId, addPrewarmer: addPrewarmer,
            getSettings: getSettings, setSettings: setSettings,
            VOICES: VOICES, RATES: RATES, PITCHES: PITCHES, DEF: DEF };
 })();

@@ -66,7 +66,9 @@ window.HH = (function () {
     if (muted || !text) return null;
     stopSpeak();
     if (window.HHTTS) return window.HHTTS.speak(String(text), opt, browserSpeak);
-    return browserSpeak(text, opt);
+    /* 无 HHTTS 时同样遵守 fallbackText 契约：拼音音节的降级替代文本（汉字）。
+       漏掉这一步时，tts.js 未加载的极端情况下仍会把拼音标注交给系统语音。 */
+    return browserSpeak(opt.fallbackText || text, opt);
   }
   function stopSpeak() {
     if ('speechSynthesis' in window) speechSynthesis.cancel();

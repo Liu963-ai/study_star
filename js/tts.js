@@ -83,6 +83,41 @@ window.HHTTS = (function () {
     }
     return syl;
   }
+  /* ---- 非独立音节的合成替身（synthForm） ----
+     edge-tts（Azure）对「不能独立成音节的孤立韵母标注」直接返回
+     NoAudioReceived（无音频、0 字节）。实测（edge-tts 7.2.8 / 小艺姐姐）：
+       成功  ā bā bà zhī 玻 一 爸爸
+       失败  ī í ǐ ì ū（全部 NoAudioReceived）
+     原因见《汉语拼音方案》：a/o/e 可以独立成音节，i/u/ü 独立时必须写成
+     yi/wu/yu（i 行改 y、u 行改 w、ü 行加 y 并去两点）。
+     后果很严重：这些标注**永远合成不出来**（不是慢，是拿不到音频）→
+     语音库缺条 → 每次点击都现场合成并失败 → 降级到系统语音 →
+     孩子听到丢声调或按英文字母读的错误读音。
+     这里按正字法给出「读音完全相同」的合法写法，只替换送往 TTS 的文本：
+     页面显示、语音库键、内存缓存键仍用原标注（缓存键经 keyFor 统一，见下）。 */
+  const STANDALONE = {
+    'i': 'yi', 'ia': 'ya', 'ie': 'ye', 'iao': 'yao', 'iu': 'you', 'ian': 'yan',
+    'in': 'yin', 'iang': 'yang', 'ing': 'ying', 'iong': 'yong',
+    'u': 'wu', 'ua': 'wa', 'uo': 'wo', 'uai': 'wai', 'ui': 'wei', 'uan': 'wan',
+    'un': 'wen', 'uang': 'wang', 'ueng': 'weng',
+    'ü': 'yu', 'üe': 'yue', 'üan': 'yuan', 'ün': 'yun'
+  };
+  const TONE_OF = {};                        /* 'ǐ' → ['i', 3] 反向查表 */
+  Object.keys(TONE_CHAR).forEach(v => {
+    for (let t = 0; t < 4; t++) TONE_OF[TONE_CHAR[v][t]] = [v, t + 1];
+  });
+  /* 只对「整体就是一个独立韵母」的标注生效：bā/zhī/玻/一 一律原样返回 */
+  function synthForm(text) {
+    const s = String(text);
+    let base = '', tone = 0;
+    for (const ch of s) {
+      const info = TONE_OF[ch];
+      if (info) { base += info[0]; tone = info[1]; }
+      else base += ch;
+    }
+    const fixed = STANDALONE[base];
+    return fixed ? addTone(fixed, tone || 1) : s;
+  }
   /* 声母判定：必须覆盖 zh/ch/sh 双字母（旧正则 [bpmfdtnlgkhjqxzhchszywr]
      是单字符集合，'zh' 长度 2 永远不匹配），同时不能把 zhi/chi/shi
      等整体认读误判成声母——正则整体加 (?:…) 与 $ 锚定。 */
@@ -229,7 +264,7 @@ window.HHTTS = (function () {
     return fetch(TTS_BASE + '/tts', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ text: text, voice: GLOBAL.voice, rate: rate, pitch: pitch, prio: prio || 0 }),
+      body: JSON.stringify({ text: synthForm(text), voice: GLOBAL.voice, rate: rate, pitch: pitch, prio: prio || 0 }),
       signal: ctrl.signal
     }).then(res => {
       clearTimeout(timer);
@@ -303,8 +338,10 @@ window.HHTTS = (function () {
   }
   function effPitch(s) { return s.pitch; }
 
+  /* 缓存键用「合成文本」：孤立韵母标注（ǐ）与其合法写法（yǐ）读音相同、
+     服务端产物也相同，共用一份缓存，避免重复合成与语音库虚胖。 */
   function keyFor(text, voice, rate, pitch) {
-    return [text, voice, rate, pitch].join('|');
+    return [synthForm(text), voice, rate, pitch].join('|');
   }
 
   /* ---- 取音频 url：内存命中秒回；合成中并发去重；失败重试一次 ----
@@ -322,7 +359,7 @@ window.HHTTS = (function () {
           res = await fetch(TTS_BASE + '/tts', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ text: text, voice: voice, rate: rate, pitch: pitch, prio: prio || 0 }),
+            body: JSON.stringify({ text: synthForm(text), voice: voice, rate: rate, pitch: pitch, prio: prio || 0 }),
             signal: ctrl.signal
           });
           clearTimeout(timer);
@@ -530,6 +567,7 @@ window.HHTTS = (function () {
            ensurePinyinBank: ensurePinyinBank, syllableOf: syllableOf,
            /* 标调与语音库清单：与 pinyin.js 共用同一份实现，勿在别处另写一份 */
            addTone: addTone, toneBase: toneBase, pinyinBankList: pinyinBankList,
+           synthForm: synthForm,
            VOICES: VOICES, RATES: RATES, PITCHES: PITCHES, DEF: DEF, GLOBAL: GLOBAL };
 })();
 /* 全局统一工具类别名：所有页面通过 window.AudioManager 调用语音 */

@@ -15,6 +15,12 @@
   const DUR = 700;
   const $ = id => document.getElementById(id);
 
+  /* 导语文本：页面显示（strokeSay）与朗读（readText / 预热）共用同一份，
+     结构上不可能出现「读的和看的不是一回事」。
+     刻意不含拼音标注——汉字本身就能读出正确读音，而混入中文句的拉丁标注
+     （「一，yī」）可能被 TTS 当英文字母读（与拼音星球同源问题）。 */
+  function introText(ch) { return ch + '，看老师写一遍'; }
+
   /* ---- 字列表：教材模式＝规划器取字；内置模式＝data.js 全部 100 字 ---- */
   const book = window.HHBooks && HHBooks.active();
   const ITEMS = book
@@ -205,7 +211,7 @@
     const seq = ++loadSeq;
     refreshZiCount();
     $('zicardChar').textContent = it.char;
-    $('strokeSay').textContent = it.char + '，看老师写一遍';
+    $('strokeSay').textContent = introText(it.char);
     $('btnNextChar').classList.remove('hidden');
     /* 本字信息卡：大字 + 拼音 + 组词（点击词语朗读）。
        元素判空：旧缓存页面可能没有新元素，缺了也不阻断翻页。 */
@@ -225,9 +231,10 @@
       });
     }
 
-    /* 播报短读音「字，拼音」，随后即开始笔顺演示（与语音并行）；
-       began/loadSeq 双保险保证演示只启动一次，静音时立即开画。 */
-    const readText = it.char + (it.pinyin ? '，' + it.pinyin : '') + '。看老师写一遍';
+    /* 播报导语，随后即开始笔顺演示（与语音并行）；
+       began/loadSeq 双保险保证演示只启动一次，静音时立即开画。
+       文本与页面显示的 strokeSay 同源（introText），不含拼音标注。 */
+    const readText = introText(it.char);
     const began = { done: false };
     const begin = () => {
       if (seq !== loadSeq || began.done) return;   /* 已切字/已开画 */
@@ -259,9 +266,8 @@
       for (let i = 0; i < total; i++) {
         strokeTexts.push('第' + (i + 1) + '笔，' + (it.strokes[i].name || ''));
       }
-      const introOf = c => c.char + (c.pinyin ? '，' + c.pinyin : '') + '。看老师写一遍';
       const nxt = ITEMS[(ci + 1) % ITEMS.length];           /* 预取下一个字 */
-      window.HHTTS.prewarm([readText, introOf(nxt), it.char, nxt.char,
+      window.HHTTS.prewarm([readText, introText(nxt.char), it.char, nxt.char,
         ...(it.words || []), ...strokeTexts]);
     }
   }

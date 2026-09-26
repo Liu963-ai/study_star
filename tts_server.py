@@ -21,6 +21,7 @@ import ipaddress
 import json
 import re
 import threading
+import time
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import urlparse
 
@@ -103,15 +104,43 @@ def _key_lock(key):
 # ---- 合成优先级调度器 ----
 # 4 个工作线程；点击朗读（prio=1）随时插队，预热（prio=0）最多占 2 路，
 # 始终保留 2 路空余——孩子点击新内容时无需等待预热队列，立即开始合成。
+#
+# 看门狗（v20 新增）：edge-tts 的 WebSocket 在 Windows 上偶发无法被 asyncio
+# 取消，连 synth_to_file 的 40s 硬超时也拦不住，worker 线程会永久卡在 await。
+# 实测曾把 4 路全部卡死，后果是双重的：
+#   · 队列里的新任务永远不被领取（连 .part 都不再创建），前端全部 60s 后 504；
+#   · 卡死的是预热任务时 _active_low 不会归还，预热通道被永久饿死；
+#   · 只能重启进程才能恢复。
+# 线程无法 kill，但可以「不再信任它」：超过 JOB_TIMEOUT 就把它从 _running
+# 摘除、归还它占用的低优先额度，并补一个新的 worker 接管队列。
 class _PriorityScheduler:
+    JOB_TIMEOUT = 120       # 单次「领取任务 → 执行完」的上限（秒）；正常最坏约 80s
+    WATCH_INTERVAL = 5      # 看门狗巡检间隔（秒）
+    MAX_WORKERS = 12        # 线程泄漏上限（卡死才补，避免上游长期故障时无限膨胀）
+
     def __init__(self, workers=4, low_slots=2):
         self._cv = threading.Condition()
         self._heap = []          # (-prio, seq, fn)
         self._seq = 0
         self._active_low = 0     # 正在执行的预热数
         self._low_slots = low_slots
-        for _ in range(workers):
-            threading.Thread(target=self._worker, daemon=True).start()
+        self._running = {}       # wid -> [领取时刻, prio]
+        self._wid_seq = 0
+        self._total = 0          # 已创建（含被放弃的）worker 数
+        self._spawn(workers)
+        threading.Thread(target=self._watchdog, daemon=True).start()
+
+    def _spawn(self, n):
+        for _ in range(n):
+            with self._cv:
+                if self._total >= self.MAX_WORKERS:
+                    print("[watchdog] worker 数已达上限 " + str(self.MAX_WORKERS) +
+                          "，不再补线程（建议重启服务）", flush=True)
+                    return
+                self._total += 1
+                self._wid_seq += 1
+                wid = self._wid_seq
+            threading.Thread(target=self._worker, args=(wid,), daemon=True).start()
 
     def submit(self, prio, fn):
         with self._cv:
@@ -119,7 +148,27 @@ class _PriorityScheduler:
             heapq.heappush(self._heap, (-prio, self._seq, (prio, fn)))
             self._cv.notify_all()
 
-    def _worker(self):
+    def _watchdog(self):
+        while True:
+            time.sleep(self.WATCH_INTERVAL)
+            stuck = []
+            with self._cv:
+                now = time.time()
+                for wid in list(self._running.keys()):
+                    if now - self._running[wid][0] > self.JOB_TIMEOUT:
+                        rec = self._running.pop(wid)
+                        if rec[1] < 1:
+                            self._active_low -= 1     # 归还被卡死的预热额度
+                        stuck.append((wid, now - rec[0]))
+                if stuck:
+                    self._cv.notify_all()
+            for wid, dt in stuck:
+                print("[watchdog] worker %d 卡死 %.0fs，已放弃该线程并补一个新线程"
+                      % (wid, dt), flush=True)
+            if stuck:
+                self._spawn(len(stuck))
+
+    def _worker(self, wid):
         while True:
             with self._cv:
                 while True:
@@ -140,12 +189,16 @@ class _PriorityScheduler:
                     self._heap.pop(i)
                     if prio < 1:
                         self._active_low += 1
+                    self._running[wid] = [time.time(), prio]
                     break
             try:
                 fn()
             finally:
                 with self._cv:
-                    if prio < 1:
+                    rec = self._running.pop(wid, None)
+                    # rec 为 None 表示本线程已被看门狗判定卡死并归还过额度，
+                    # 此处绝不能重复递减，否则 _active_low 会被减成负数。
+                    if rec and rec[1] < 1:
                         self._active_low -= 1
                     self._cv.notify_all()
 
@@ -375,6 +428,7 @@ class Handler(BaseHTTPRequestHandler):
                 done = threading.Event()
 
                 def job():
+                    tmp = None
                     try:
                         with _key_lock(key):
                             if not os.path.exists(path):
@@ -386,6 +440,13 @@ class Handler(BaseHTTPRequestHandler):
                                               tmp)
                                 os.replace(tmp, path)
                     finally:
+                        # 合成失败/超时会留下 0 字节 .part（实测缓存目录已堆积多个），
+                        # 这里兜底清理；os.replace 成功后 tmp 已不存在，remove 抛错即忽略。
+                        if tmp:
+                            try:
+                                os.remove(tmp)
+                            except OSError:
+                                pass
                         done.set()
 
                 _SCHED.submit(prio, job)

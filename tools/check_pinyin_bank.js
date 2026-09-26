@@ -127,6 +127,106 @@ ok(/pinyin:\s*true/.test(dituSrc),
 ok(!/say:\s*'哪个字读'\s*\+\s*it\.py/.test(dituSrc),
    'js/ditu.js 的 py2char 题干仍内嵌拼音标注（应拆成 say + sayPy）');
 
+/* ---------- 11) 全站静态检查：朗读文本不得内联拼音标注 ----------
+   把汉字对象的 .pinyin / .py 字段拼进朗读文本，会让 TTS 在中文句里遇到
+   拉丁标注（「一，yī。看老师写一遍」），可能被读成英文字母；同时造成
+   「朗读文本 ≠ 页面可见文本」。拼音标注只能走 pinyinVoice 专用通道
+   （syllableOf / toneBase + addTone），不能混进汉字句。 */
+function firstArgs(src) {
+  const out = [];
+  const re = /(?:syllableOf\s*\(|(?:^|[^\w.$])(?:speak|prewarm)\s*\()/g;
+  let m;
+  while ((m = re.exec(src))) {
+    if (/function\s*$/.test(src.slice(0, m.index))) continue;   /* 跳过函数定义 */
+    let i = m.index + m[0].length, depth = 0, buf = '';
+    while (i < src.length) {
+      const ch = src[i];
+      if (ch === '"' || ch === "'" || ch === '`') {
+        const q = ch; buf += ch; i++;
+        while (i < src.length && src[i] !== q) {
+          if (src[i] === '\\') { buf += src[i]; i++; }
+          buf += src[i]; i++;
+        }
+        buf += src[i] || ''; i++; continue;
+      }
+      if (ch === '(' || ch === '[' || ch === '{') { depth++; buf += ch; i++; continue; }
+      if (ch === ')' || ch === ']' || ch === '}') {
+        if (depth === 0) break;                 /* 调用自身的结束括号 */
+        depth--; buf += ch; i++; continue;
+      }
+      if (ch === ',' && depth === 0) break;     /* 顶层逗号：第一个参数结束 */
+      buf += ch; i++;
+    }
+    out.push({
+      arg: buf.trim(),
+      line: src.slice(0, m.index).split('\n').length
+    });
+  }
+  return out;
+}
+
+const jsDir = path.join(ROOT, 'js');
+const inline = [];
+for (const f of fs.readdirSync(jsDir).filter(x => x.endsWith('.js'))) {
+  if (f === 'tts.js') continue;                    /* 实现层，内部自己处理标注 */
+  const src = fs.readFileSync(path.join(jsDir, f), 'utf8');
+  for (const { arg, line } of firstArgs(src)) {
+    if (/\.pinyin\b|\.py\b/.test(arg)) {
+      inline.push(`js/${f}:${line}  ${arg.slice(0, 60)}`);
+    }
+  }
+}
+ok(inline.length === 0,
+   '以下朗读调用把拼音标注内联进了文本（会被读成英文字母，且与可见文本不一致）：\n      ' +
+   inline.join('\n      '));
+
+/* ---------- 12) 静态检查：生字页导语的「所读」与「所见」必须同源 ---------- */
+const szSrc = fs.readFileSync(path.join(ROOT, 'js', 'shengzi.js'), 'utf8');
+ok(/function introText\s*\(/.test(szSrc),
+   'js/shengzi.js 未定义 introText —— 导语文本必须由单一函数产出，避免「读的」与「看的」分叉');
+ok((szSrc.match(/introText\(/g) || []).length >= 3,
+   'js/shengzi.js 的 introText 未被 strokeSay / readText / 预热共同复用');
+ok(!/['"，]\s*['"]\s*\+\s*it\.pinyin/.test(szSrc),
+   'js/shengzi.js 导语又把拼音标注拼进朗读文本了');
+
+/* ---------- 13) 静态检查：common.js 的本地兜底必须遵守 fallbackText ---------- */
+const cmSrc = fs.readFileSync(path.join(ROOT, 'js', 'common.js'), 'utf8');
+ok(/browserSpeak\(opt\.fallbackText\s*\|\|\s*text/.test(cmSrc),
+   'js/common.js 的 speak 未透传 opt.fallbackText —— 无 HHTTS 时仍会把拼音标注交给系统语音');
+
+/* ---------- 14) 合成形式：孤立韵母必须改写成合法音节 ----------
+   edge-tts 对「不能独立成音节的孤立韵母标注」（ī/ū/ǖn…）返回 NoAudioReceived
+   ——不是慢，是拿不到音频，于是永远降级到系统语音读错。synthForm 按
+   《汉语拼音方案》把它们改写成读音相同的合法写法（ī→yī、ū→wū、ǖn→yūn）。 */
+const synthForm = T.synthForm;
+ok(typeof synthForm === 'function',
+   'js/tts.js 未导出 synthForm（孤立韵母缺合成替身，要么合成失败要么读错）');
+if (typeof synthForm === 'function') {
+  const FORM = [
+    ['ī', 'yī'], ['í', 'yí'], ['ǐ', 'yǐ'], ['ì', 'yì'],
+    ['ū', 'wū'], ['ú', 'wú'], ['ǔ', 'wǔ'], ['ù', 'wù'],
+    ['ǖ', 'yū'], ['ǘ', 'yú'], ['ǚ', 'yǔ'], ['ǜ', 'yù'],
+    ['ǖn', 'yūn'], ['üē', 'yuē'], ['īng', 'yīng'], ['uī', 'wēi'],
+    ['ā', 'ā'], ['bā', 'bā'], ['zhī', 'zhī'], ['玻', '玻'], ['一', '一']
+  ];
+  const wrong = FORM.filter(([inp, want]) => synthForm(inp) !== want)
+                    .map(([inp, want]) => inp + '→' + synthForm(inp) + '（期望 ' + want + '）');
+  ok(wrong.length === 0, 'synthForm 转换错误：' + wrong.join('；'));
+
+  /* 以 i/u/ü（含带调形式）起首的标注一律必须被改写，不得漏网 */
+  const LEAD = /^[iuüīíǐìūúǔùǖǘǚǜ]/;
+  const missed = bankList.filter(x => LEAD.test(x) && synthForm(x) === x);
+  ok(missed.length === 0,
+     '以下标注以 i/u/ü 起首却未被改写（会合成失败）：' + missed.slice(0, 12).join(' '));
+
+  const rewritten = bankList.filter(x => synthForm(x) !== x);
+  ok(rewritten.length > 0,
+     '语音库里没有任何标注需要改写，说明 synthForm 未生效或数据异常');
+  notes.push('合成形式：语音库 ' + bankList.length + ' 条中 ' + rewritten.length +
+             ' 条改写成合法音节（如 ' + rewritten.slice(0, 4).join(' ').replace(/\u0020/g, ' ') +
+             ' → ' + rewritten.slice(0, 4).map(x => synthForm(x)).join(' ') + '）');
+}
+
 /* ---------- 输出 ---------- */
 function report() {
   notes.forEach(n => console.log('  · ' + n));

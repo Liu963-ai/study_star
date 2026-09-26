@@ -18,6 +18,8 @@
     <button class="back-btn pressable" data-say="回首页"><span class="ico" data-ico="back"></span></button>
     <button class="star-pill pressable">⭐ <b data-star-count>0</b></button>
     <span class="topbar-space"></span>
+    <button class="icon-btn btn-timed pressable" id="timedToggle" aria-pressed="false"
+            aria-label="限时挑战"><span aria-hidden="true">⏱</span></button>
     <button class="icon-btn btn-volume pressable" aria-label="音量开关"></button>
   </header>
 
@@ -42,6 +44,8 @@
   <div class="quest hidden" id="quest">
     <div class="quest-card card">
       <p class="quest-level" id="questLevel">第 1 关</p>
+      <!-- 限时挑战的剩余时间条（未开启限时挑战时不显示，不占位） -->
+      <div class="quest-timer hidden" id="questTimer" aria-hidden="true"><i id="questTimerBar"></i></div>
       <div class="quest-ask" id="questAsk"></div>
       <div class="quest-opts" id="questOpts"></div>
       <div class="quest-foot">

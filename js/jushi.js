@@ -86,17 +86,17 @@
       const ghost = block;                       /* 直接把原块变成 fixed 跟随 */
       const ox = e.clientX - rect.left, oy = e.clientY - rect.top;
       ghost.classList.add('dragging');
-      ghost.style.left = rect.left + 'px';
-      ghost.style.top = rect.top + 'px';
       ghost.style.width = rect.width + 'px';
       ghost.style.height = rect.height + 'px';
+      /* 位移走 transform（.dragging 已把 left/top 归零）：拖动期间只改
+         transform，不触发布局，低端平板上不会掉帧。 */
+      ghost.style.transform = 'translate(' + rect.left + 'px,' + rect.top + 'px)';
       let lastX = e.clientX;
 
       function move(ev) {
-        ghost.style.left = (ev.clientX - ox) + 'px';
-        ghost.style.top = (ev.clientY - oy) + 'px';
         const tilt = Math.max(-6, Math.min(6, (ev.clientX - lastX) * 0.6));  /* ≤6° */
-        ghost.style.transform = 'rotate(' + tilt + 'deg)';
+        ghost.style.transform = 'translate(' + (ev.clientX - ox) + 'px,' +
+                                (ev.clientY - oy) + 'px) rotate(' + tilt + 'deg)';
         lastX = ev.clientX;
         /* 悬停槽位高亮 */
         document.querySelectorAll('.slot').forEach(s => {
@@ -115,7 +115,6 @@
       function up(ev) {
         if (ev.pointerId != null && ev.pointerId !== pid) return;   /* 多指串扰：只认自己那根手指 */
         cleanup();
-        ghost.style.transform = '';
         /* 被系统手势/来电打断（pointercancel）：直接弹回原位，不做吸附判定，
            否则积木会永远停在 .dragging 的 fixed 位置上，同屏多个之后整页卡死 */
         const cancelled = ev.type === 'pointercancel';
@@ -134,8 +133,7 @@
         else {
           /* 拖错/没对上：弹回托盘 + 温和提示（§7.1 再试一次，无惩罚） */
           ghost.classList.add('returning');
-          ghost.style.left = rect.left + 'px';
-          ghost.style.top = rect.top + 'px';
+          ghost.style.transform = 'translate(' + rect.left + 'px,' + rect.top + 'px)';
           setTimeout(() => {
             ghost.classList.remove('dragging', 'returning');
             ghost.style.cssText = '';

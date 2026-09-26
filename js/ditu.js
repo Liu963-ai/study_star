@@ -1,18 +1,23 @@
 /* ============================================================
    闯关地图逻辑 · ditu.js（v2 重做：可玩的关卡答题）
    ------------------------------------------------------------
-   · 10 个关卡沿小路排布，每关一道选择题，题目从四站内容随机生成：
-     看图选词 / 听音选声母 / 字选拼音 / 拼音选字 / 诗句出处（第 10 关）
+   · 10 个关卡沿小路排布，每关一道选择题，题目从各站内容随机生成：
+     看图选词 / 听音选声母 / 字选拼音 / 拼音选字 / 连读辨调 /
+     诗句出处（第 10 关）
    · 状态 hh_mapLevel（当前关卡 1-10）：答对解锁下一关；
      10 关全过 → 庆祝弹层 → 领星星（gotoSettle），新一轮重新随机出题
    · 答错不惩罚：轻摇 + 「再想一想」，可继续选
    · 小火车 🚂 停在当前关卡，过关后开往下一站
+   · 限时挑战（顶栏 ⏱ 开关，状态 hh_mapTimed）：每道题一根剩余时间条，
+     时间用完不判错、不关题，只温柔提示；10 秒内答对额外奖 1 颗星。
+     奖励只加不减，符合「一年级不出现惩罚性反馈」的约束。
    ============================================================ */
 (function () {
   'use strict';
-  const { speak, sfx, store, icon } = HH;
+  const { speak, sfx, store, icon, toast } = HH;
   const $ = id => document.getElementById(id);
   const stage = $('mapStage'), train = $('train');
+  const T = window.HHTTS;                    /* 标调与拼音安全音色（tts.js） */
 
   /* 节点坐标（百分比），大致沿既有虚线路径 */
   const NODE_XY = [
@@ -23,8 +28,8 @@
   /* 每关的题型池（由易到难）；关数超过池长度时取模复用 */
   const LEVEL_TYPES = [
     ['emoji'], ['sound'], ['emoji', 'sound'],
-    ['char2py'], ['py2char'], ['sound', 'char2py'],
-    ['py2char', 'emoji'], ['char2py', 'sound'],
+    ['char2py'], ['py2char', 'tone'], ['sound', 'char2py'],
+    ['py2char', 'emoji'], ['char2py', 'sound', 'tone'],
     ['py2char', 'char2py'], ['poem']
   ];
   function typesOf(n) { return LEVEL_TYPES[(n - 1) % LEVEL_TYPES.length]; }
@@ -65,6 +70,10 @@
     DATA.pinyin[g].forEach(it => it.chars.forEach(x => PY_CHARS.push({ c: x.c, py: x.py }))));
   /* 声母呼读音表 */
   const SHENGMU = DATA.pinyin.shengmu;
+  /* 拼音全表 63 项（连读辨调取音节用；与拼音站同源，改数据即同步） */
+  const ALL_PINYIN = [];
+  ['shengmu', 'yunmu', 'zhengti'].forEach(g =>
+    DATA.pinyin[g].forEach(x => ALL_PINYIN.push({ p: x.p, read: x.read })));
   /* 生字表 [{char, pinyin}] */
   const SZ = DATA.shengzi.map(s => ({ char: s.char, py: s.pinyin }));
 
@@ -94,6 +103,30 @@
         autoSayDelay: 500,
         opts: shuffle([it, ...others]).map(o => ({
           label: o.p, right: o.p === it.p, speak: o.read
+        }))
+      };
+    }
+    if (type === 'tone') {
+      /* 语音模块缺失时不硬撑，退回同族的看字选拼音（标调全靠 tts.js） */
+      if (!(T && typeof T.addTone === 'function' && typeof T.toneBase === 'function')) {
+        return buildQuestion('char2py');
+      }
+      /* 连读辨调：给出一个带声调的标注（如 bǎ），选出它是第几声。
+         四个选项固定为四个声调，选项里朗读的是「同一个音节在该声调下的
+         读法」（bā / bá / bǎ / bà）——点错也能听到声调对比，是可听的
+         反馈；标注统一走拼音安全音色，服务不可用时静音，绝不读成英文字母。 */
+      const it = rnd(ALL_PINYIN);
+      const base = T.toneBase(it.p);
+      const tone = 1 + Math.floor(Math.random() * 4);
+      const TONE_CN = ['第一声', '第二声', '第三声', '第四声'];
+      return {
+        big: T.addTone(base, tone),
+        bigCls: 'pinyin',
+        say: '这个音是第几声？',
+        sayPy: T.addTone(base, tone),
+        opts: TONE_CN.map((name, i) => ({
+          label: name, right: i + 1 === tone,
+          speak: T.addTone(base, i + 1), pinyin: true
         }))
       };
     }
@@ -186,6 +219,58 @@
   const quest = $('quest');
   let curQ = null, curLevel = 0, answered = false;
 
+  /* ================= 限时挑战（正向激励，无惩罚） =================
+     顶栏 ⏱ 开关（状态 hh_mapTimed）开启后，每道题显示一根剩余时间条：
+       · 时间用完不判错、不关闭题目，只温柔提示「时间到啦，慢慢想也可以」，
+         题目继续可答 —— 一年级不出现惩罚性反馈（任务书 §7.1）；
+       · 奖励只加不减：10 秒内答对额外奖 1 颗星，答对本身照常走关卡记账；
+       · 时间条只改 transform，逐帧不触发重排。 */
+  const TIMED_LIMIT_MS = 20000;      /* 一根条跑完的时间 */
+  const TIMED_FAST_MS = 10000;       /* 在这个时间内答对算「又快又准」 */
+  let timedOn = store.get('mapTimed', false) === true;
+  let timedId = null, timedStart = 0;
+  const timedToggle = $('timedToggle'), timedEl = $('questTimer'), timedBar = $('questTimerBar');
+
+  function paintTimedToggle() {
+    timedToggle.setAttribute('aria-pressed', timedOn ? 'true' : 'false');
+    timedToggle.setAttribute('aria-label', timedOn ? '限时挑战已开启' : '限时挑战已关闭');
+  }
+  timedToggle.addEventListener('click', () => {
+    timedOn = !timedOn;
+    store.set('mapTimed', timedOn);
+    paintTimedToggle();
+    sfx.tap();
+    speak(timedOn ? '限时挑战开始，答得快还有奖励哦' : '限时挑战关掉啦，慢慢想也可以');
+  });
+
+  function stopTimer() {
+    if (timedId !== null) { clearInterval(timedId); timedId = null; }
+    timedEl.classList.add('hidden');
+    timedBar.style.transform = 'scaleX(1)';
+  }
+  function startTimer() {
+    stopTimer();
+    if (!timedOn) return;
+    timedStart = Date.now();
+    timedEl.classList.remove('hidden');
+    timedId = setInterval(() => {
+      const left = TIMED_LIMIT_MS - (Date.now() - timedStart);
+      if (left <= 0) {                       /* 时间到：停表、提示，但不判错 */
+        clearInterval(timedId);
+        timedId = null;
+        timedBar.style.transform = 'scaleX(0)';
+        toast('时间到啦，慢慢想也可以');
+        speak('时间到啦，慢慢想也可以');
+        return;
+      }
+      timedBar.style.transform = 'scaleX(' + (left / TIMED_LIMIT_MS).toFixed(3) + ')';
+    }, 100);
+  }
+  /* 是否「又快又准」：必须在 stopTimer 之前调用（停表会把定时器清掉） */
+  function answeredFast() {
+    return timedOn && timedId !== null && (Date.now() - timedStart) <= TIMED_FAST_MS;
+  }
+
   function openQuest(n) {
     curLevel = n;
     answered = false;
@@ -210,13 +295,16 @@
     /* autoSayDelay：题干音频的延迟（听音题需要稍等遮罩动画再出声）——
        此前这个字段被声明却从未生效，一律写死 350ms */
     setTimeout(sayQuestion, curQ.autoSayDelay || 350);
+    startTimer();
     /* 预热题目与选项语音（答对/答错反馈也提前合成）。
        拼音标注与汉字必须分开预热：音色不同，混在一起会导致缓存键错配，
        点击时仍要现场合成。 */
     if (window.HHTTS && window.HHTTS.prewarm) {
       const plain = curQ.opts.filter(o => !o.pinyin).map(o => o.speak || o.label);
       const pyOpts = curQ.opts.filter(o => o.pinyin).map(o => o.speak || o.label);
-      window.HHTTS.prewarm([curQ.say, ...plain, '答对啦！小火车出发喽', '再想一想']);
+      window.HHTTS.prewarm([curQ.say, ...plain, '答对啦！小火车出发喽',
+                            '答对啦，又快又准！小火车出发喽',
+                            '再想一想', '时间到啦，慢慢想也可以']);
       if (curQ.sayPy) window.HHTTS.prewarm([curQ.sayPy], { pinyinVoice: true });
       if (pyOpts.length) window.HHTTS.prewarm(pyOpts, { pinyinVoice: true });
     }
@@ -234,11 +322,11 @@
     }
   }
   $('questListen').addEventListener('click', () => sayQuestion());
-  $('questClose').addEventListener('click', () => quest.classList.add('hidden'));
+  $('questClose').addEventListener('click', () => { stopTimer(); quest.classList.add('hidden'); });
 
   function choose(btn, o) {
     sfx.tap();
-    /* 选项若是拼音标注（char2py：bà/shān…），必须走拼音安全音色 +
+    /* 选项若是拼音标注（char2py / tone：bà、ǎ…），必须走拼音安全音色 +
        降级保护，否则会被读成英文字母或丢失声调 */
     speak(o.speak || o.label, o.pinyin ? { pinyinVoice: true } : undefined);
     if (answered) return;
@@ -246,9 +334,16 @@
       answered = true;
       sfx.star();
       btn.classList.add('right');
+      const fast = answeredFast();          /* 必须先判定：stopTimer 会清掉计时器 */
+      stopTimer();
+      if (fast) {
+        /* 只加不减：又快又准额外奖 1 颗星（答对本身的关卡记账照旧） */
+        HH.record({ stars: 1 });
+        toast('又快又准，多奖 1 颗星！');
+      }
       setTimeout(() => {
         quest.classList.add('hidden');
-        levelComplete();
+        levelComplete(fast);
       }, 700);
     } else {
       sfx.hmm();
@@ -258,9 +353,10 @@
     }
   }
 
-  function levelComplete() {
+  function levelComplete(fast) {
+    stopTimer();
     sfx.ok();
-    speak('答对啦！小火车出发喽');
+    speak(fast ? '答对啦，又快又准！小火车出发喽' : '答对啦！小火车出发喽');
     if (level < TOTAL) {
       level++;
       store.set('mapLevel', level);
@@ -290,6 +386,7 @@
   });
 
   /* ---- 启动 ---- */
+  paintTimedToggle();
   paint();
   setTimeout(() => speak('欢迎来到闯关地图，点击发光的关卡，答对题目小火车就出发！'), 500);
 })();

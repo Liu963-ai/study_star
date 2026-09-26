@@ -11,7 +11,7 @@
        任一代码文件变更时由版本号 VER 触发旧缓存整体清理）
    · 跨域请求（127.0.0.1:7860 的 TTS/LLM）→ 不拦截，直接放行网络
    ============================================================ */
-const VER = 'hh-v20';  /* v20 生字页导语朗读与可见文本对齐、朗读参数防回归校验（详见 项目说明书.md §15） */
+const VER = 'hh-v21';  /* v21 收尾：一键全量回归入口、静态一致性检查、闯关新玩法（连读辨调+限时挑战）、词语乐园常识配词、拼音录音包开关（详见 项目说明书.md §16） */
 const CORE = [
   'index.html', 'home.html', 'ditu.html', 'pinyin.html', 'shengzi.html',
   'langdu.html', 'jushi.html', 'jiangli.html', 'jiesuan.html',

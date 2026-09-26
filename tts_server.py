@@ -105,16 +105,17 @@ def _key_lock(key):
 # 4 个工作线程；点击朗读（prio=1）随时插队，预热（prio=0）最多占 2 路，
 # 始终保留 2 路空余——孩子点击新内容时无需等待预热队列，立即开始合成。
 #
-# 看门狗（v20 新增）：edge-tts 的 WebSocket 在 Windows 上偶发无法被 asyncio
-# 取消，连 synth_to_file 的 40s 硬超时也拦不住，worker 线程会永久卡在 await。
-# 实测曾把 4 路全部卡死，后果是双重的：
-#   · 队列里的新任务永远不被领取（连 .part 都不再创建），前端全部 60s 后 504；
-#   · 卡死的是预热任务时 _active_low 不会归还，预热通道被永久饿死；
-#   · 只能重启进程才能恢复。
-# 线程无法 kill，但可以「不再信任它」：超过 JOB_TIMEOUT 就把它从 _running
-# 摘除、归还它占用的低优先额度，并补一个新的 worker 接管队列。
+# 看门狗（v20 新增，v21 收紧）：edge-tts 的 WebSocket 在 Windows 上偶发无法被
+# asyncio 取消，连 synth_to_file 的 40s 硬超时也拦不住，worker 线程会永久卡在 await。
+# 实测曾把 4 路全部卡死：队列里的新任务永远不被领取（连 .part 都不再创建）、
+# 卡死的若是预热任务则 _active_low 不归还导致预热通道饿死，只能重启进程恢复。
+#
+# v21 起预热任务已改走子进程（可强制 kill，见 synth_via_process），
+# 线程池里只剩「点击」任务，卡死面大幅收窄。这里作为最后一道兜底：
+# 超过 JOB_TIMEOUT 就把它从 _running 摘除、归还它占用的低优先额度，
+# 并补一个新的 worker 接管队列。
 class _PriorityScheduler:
-    JOB_TIMEOUT = 120       # 单次「领取任务 → 执行完」的上限（秒）；正常最坏约 80s
+    JOB_TIMEOUT = 60        # 单次「领取任务 → 执行完」的上限（秒）；合成硬超时 40s
     WATCH_INTERVAL = 5      # 看门狗巡检间隔（秒）
     MAX_WORKERS = 12        # 线程泄漏上限（卡死才补，避免上游长期故障时无限膨胀）
 
@@ -203,21 +204,80 @@ class _PriorityScheduler:
                     self._cv.notify_all()
 
 
-_SCHED = _PriorityScheduler(4, low_slots=2)
+# 调度器惰性创建：预热任务走的子进程会重新 import 本模块（spawn 语义），
+# 若在模块级就建调度器，每次 spawn 都会白建 4 个 worker + 1 个看门狗线程。
+_SCHED = None
+_SCHED_GUARD = threading.Lock()
+
+
+def _sched():
+    global _SCHED
+    if _SCHED is None:
+        with _SCHED_GUARD:
+            if _SCHED is None:
+                _SCHED = _PriorityScheduler(4, low_slots=2)
+    return _SCHED
 
 
 def synth_to_file(text, voice, rate, pitch, path):
     """调用 edge-tts 合成一段 mp3 落盘到 path（调用方已构造缓存路径），
     随后原地做 DSP 音质增强。
-    硬超时：云端 WebSocket 偶发卡死会无限挂起（曾把全局锁一起拖死，
-    表现为全站「点击没声音」），这里对整次合成加 40s 上限，超时抛错
-    由调用方返回 500，客户端随即降级浏览器语音，不再无限等待。"""
+
+    **点击通道专用**（prio=1）：线程内直接合成，省掉子进程启动开销
+    （实测 spawn + import edge_tts 要约 1.5s，而客户端只等 4.5s）。
+    线程卡死的兜底由 _PriorityScheduler 的看门狗负责，不再依赖下面这个
+    硬超时——asyncio.wait_for 在 Windows 上无法取消 edge-tts 的 WebSocket，
+    实测拦不住；保留它只是为了让 Linux/macOS 上多一层保护。"""
     async def run():
         communicate = edge_tts.Communicate(
             text, voice, rate=rate, pitch=pitch,
             connect_timeout=10, receive_timeout=30)
         await communicate.save(path)
     asyncio.run(asyncio.wait_for(run(), timeout=40))
+    enhance_file(path)
+
+
+# ================= 子进程隔离合成（预热通道专用） =================
+# 根治手段：edge-tts 的 WebSocket 在 Windows 上偶发无法被 asyncio 取消，
+# 线程会永久卡在 await 且无法 kill。进程可以 kill——所以后台预热任务
+# 一律放到独立子进程里跑，超时直接 kill，父进程与调度器永远不会被拖死。
+#
+# 代价（实测，Windows + Python 3.12）：spawn 一个子进程并 import 完
+# edge-tts 及其依赖约 1.43~1.51s。只作用于后台预热；点击路径仍走线程，
+# 保证 4.5s 客户端超时内的低延迟。
+_SYNTH_TIMEOUT = 45          # 子进程内单次合成的上限（秒）
+
+
+def _child_synth(text, voice, rate, pitch, path):
+    """子进程入口：只负责合成 mp3 落盘，音质增强留给父进程做。
+
+    刻意不在这里调用 enhance_file——它需要 numpy / soundfile，
+    而父进程早已加载过这两个库，重复加载只会把子进程启动开销推高。"""
+    async def run():
+        communicate = edge_tts.Communicate(
+            text, voice, rate=rate, pitch=pitch,
+            connect_timeout=10, receive_timeout=30)
+        await communicate.save(path)
+    asyncio.run(asyncio.wait_for(run(), timeout=_SYNTH_TIMEOUT))
+
+
+def synth_via_process(text, voice, rate, pitch, path):
+    """在独立子进程中合成，超时强制 kill（父进程不会被卡死）。
+
+    返回前保证：成功则 path 已是可读的 mp3；失败/超时则抛异常，
+    且不留下半成品（.part 由调用方 finally 清理）。"""
+    import multiprocessing as mp
+    ctx = mp.get_context("spawn")
+    proc = ctx.Process(target=_child_synth,
+                       args=(text, voice, rate, pitch, path), daemon=True)
+    proc.start()
+    proc.join(_SYNTH_TIMEOUT + 15)
+    if proc.is_alive():
+        proc.kill()
+        proc.join(5)
+        raise TimeoutError("synth subprocess timeout")
+    if proc.exitcode != 0:
+        raise RuntimeError("synth subprocess exit " + str(proc.exitcode))
     enhance_file(path)
 
 
@@ -434,10 +494,14 @@ class Handler(BaseHTTPRequestHandler):
                             if not os.path.exists(path):
                                 os.makedirs(CACHE_DIR, exist_ok=True)
                                 tmp = path + ".part"
-                                synth_to_file(text, voice,
-                                              ("+" if rate >= 0 else "") + str(rate) + "%",
-                                              ("+" if pitch >= 0 else "") + str(pitch) + "Hz",
-                                              tmp)
+                                rs = ("+" if rate >= 0 else "") + str(rate) + "%"
+                                ps = ("+" if pitch >= 0 else "") + str(pitch) + "Hz"
+                                if prio >= 1:
+                                    # 点击：线程内合成，省掉子进程约 1.5s 启动开销
+                                    synth_to_file(text, voice, rs, ps, tmp)
+                                else:
+                                    # 预热：子进程隔离，卡死可 kill（见 synth_via_process）
+                                    synth_via_process(text, voice, rs, ps, tmp)
                                 os.replace(tmp, path)
                     finally:
                         # 合成失败/超时会留下 0 字节 .part（实测缓存目录已堆积多个），
@@ -449,7 +513,7 @@ class Handler(BaseHTTPRequestHandler):
                                 pass
                         done.set()
 
-                _SCHED.submit(prio, job)
+                _sched().submit(prio, job)
                 if not done.wait(timeout=60):
                     self._json(504, {"ok": False, "msg": "synth timeout"})
                     return
@@ -481,6 +545,33 @@ class Handler(BaseHTTPRequestHandler):
 if __name__ == "__main__":
     import os
     os.makedirs(CACHE_DIR, exist_ok=True)
+    # ---- 清理上次异常退出留下的 .part 中间件 ----
+    # 合成写的是 <key>.wav.part，成功后 os.replace 成 <key>.wav。
+    # 进程被强杀、或线程卡死在 asyncio 里时，finally 来不及执行，
+    # .part 就会永久留在磁盘（实测积了 20 个，其中 19 个是 0 字节）。
+    # 缓存读取只认 .wav，这些残片永远不会被用到，只会白占磁盘。
+    try:
+        for name in os.listdir(CACHE_DIR):
+            if name.endswith(".part"):
+                os.remove(os.path.join(CACHE_DIR, name))
+    except OSError:
+        pass
+    # ---- 端口独占防护（实测踩过的坑，务必保留） ----
+    # Windows 的 SO_REUSEADDR 语义与 Linux 不同：只要两边都设了这个选项，
+    # 两个进程就能同时 bind 同一个端口，连接被随机分发到其中一个；
+    # 两个进程还会各自持有自己的 _key_lock 去争写同一个 .part 与缓存文件。
+    # 实测后果：同一段语音时好时坏、偶发整站卡死，而且「改了代码像没改」——
+    # 因为一半请求仍由旧进程处理，双进程并存时排查会完全被误导。
+    # 关掉 reuse 后第二次 bind 直接失败，明确报错而不是静默抢端口。
+    ThreadingHTTPServer.allow_reuse_address = False
+    try:
+        server = ThreadingHTTPServer((HOST, PORT), Handler)
+    except OSError as exc:
+        print("启动失败：端口 " + str(PORT) + " 已被占用（" + str(exc) + "）。")
+        print("很可能已经有一个语音服务在运行。两个进程同时监听同一端口会让请求")
+        print("随机分发、互相抢写缓存，表现为语音时好时坏甚至整站卡住。")
+        print("请先结束占用端口的进程（taskkill /PID <pid> /F），再重新启动本服务。")
+        raise SystemExit(1)
     print("edge-tts 服务已启动: 本机 http://127.0.0.1:" + str(PORT) +
           "，局域网 http://<电脑IP>:" + str(PORT) + "（缓存目录 " + CACHE_DIR + "）")
-    ThreadingHTTPServer((HOST, PORT), Handler).serve_forever()
+    server.serve_forever()

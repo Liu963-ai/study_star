@@ -199,6 +199,12 @@ window.HHTTS = (function () {
       /* 全部需要的标注：呼读音 + 四声变体（标调算法与 pinyin.js 共用一份，见 addTone） */
       const uniq = pinyinBankList();
 
+      /* 官方录音包是否启用：由内容总控的开关决定（js/data.js 的
+         pinyinAudioPack）。未启用时连第一次探测都不发——否则每次首访
+         都会产生一次 404（目录里只有说明文件），既白跑一个往返又在
+         控制台留下一条红色报错，看起来像 bug。 */
+      const packOn = !!(window.DATA && window.DATA.pinyinAudioPack);
+
       /* 先探测云端是否可用：限流/断网时本轮只装官方包与本地库存，
          不逐条空等（避免一次预热拖几十分钟），90s 后自动重试 */
       let cloudOk = true;
@@ -209,8 +215,8 @@ window.HHTTS = (function () {
       for (const ann of uniq) {
         const key = keyFor(ann, GLOBAL.rate, GLOBAL.pitch);
         if (mem.has(key)) { filled++; continue; }
-        /* ① 官方录音包（已确认目录为空则整轮跳过，不再逐条 404） */
-        if (!officialAudioMissing()) {
+        /* ① 官方录音包（未启用开关、或已确认目录为空，则整轮跳过） */
+        if (packOn && !officialAudioMissing()) {
           try {
             const r = await fetch(OFFICIAL_DIR + '/' + encodeURIComponent(ann) + '.mp3');
             if (r.ok) {

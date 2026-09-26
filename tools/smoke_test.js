@@ -14,6 +14,12 @@
 
    v19 新增：拼音语音库覆盖断言与降级通道行为断言（hook speechSynthesis.speak
    记录被朗读的文本）。凡拼音朗读都必须证明其读的是汉字或干脆不出声。
+
+   v21 新增：闯关新玩法断言 —— 限时挑战开关（aria-pressed 与 hh_mapTimed）、
+   剩余时间条（出现 / 倒数 / 关题停表）、连读辨调题的结构（4 个声调选项、
+   题干是带声调的标注）。同时把「页面运行时错误」与「脏文本」也交给
+   tools/verify_all.py 做硬断言：本脚本只管把数据采回来，退出码 0 不代表
+   页面没问题（原来只看退出码，pinyin.html 的控制台 404 一直被漏掉）。
 */
 const puppeteer = require('puppeteer-core');
 
@@ -226,11 +232,93 @@ if (hard.unref) hard.unref();
     };
   });
 
+  /* ---------- 限时挑战 + 连读辨调（v21 新增玩法） ----------
+     第 5 关的题型池是 ['py2char','tone']，两者随机——反复开题直到出现
+     辨调题（连开 12 次仍不出现的概率约 0.02%），再断言它的结构。
+     顺带在第一次开题时验证时限条出现、确实在倒数、关题即停表。 */
+  const page4 = await browser.newPage();
+  const gErr = [];
+  page4.on('pageerror', e => gErr.push('pageerror: ' + (e && e.message ? e.message : String(e))));
+  page4.on('console', m => { if (m.type() === 'error') gErr.push('console: ' + m.text()); });
+  await harden(page4);
+  await page4.goto(BASE + 'ditu.html', NAV);
+  await page4.evaluate(() => localStorage.setItem('hh_mapLevel', '5'));
+  await page4.reload(NAV);
+  await sleep(1200);
+
+  const gameplay = await page4.evaluate(async () => {
+    const nap = ms => new Promise(r => setTimeout(r, ms));
+    const out = {};
+    const toggle = document.getElementById('timedToggle');
+    const timerEl = document.getElementById('questTimer');
+    const bar = document.getElementById('questTimerBar');
+    const close = () => document.getElementById('questClose').click();
+
+    out.toggleExists = !!toggle;
+    out.defaultPressed = toggle ? toggle.getAttribute('aria-pressed') : null;
+
+    toggle.click();                                   /* 打开限时挑战 */
+    await nap(150);
+    out.afterClickPressed = toggle.getAttribute('aria-pressed');
+    out.storedFlag = localStorage.getItem('hh_mapTimed');
+
+    /* 第 5 关题型池 = py2char / tone（各 50%） */
+    const node = document.querySelectorAll('.node')[4];
+    let opened = 0, tone = null, probedTimer = false;
+    while (opened < 12 && !tone) {
+      node.click();
+      await nap(420);
+      opened++;
+      const labels = [...document.querySelectorAll('.quest-opt')].map(b => b.textContent);
+      const bigEl = document.querySelector('.quest-big');
+      const isTone = labels.length === 4 && labels.every(t => /^第[一二三四]声$/.test(t));
+      /* 必须在开题瞬间取这些状态：第一次开题那一轮末尾会点选项并关题，
+         关题会停表，之后再读就一律是「未显示」了 */
+      const visibleNow = !timerEl.classList.contains('hidden');
+
+      if (isTone) {
+        tone = {
+          labels: labels,
+          big: bigEl ? bigEl.textContent : '',
+          bigCls: bigEl ? bigEl.className : '',
+          timerVisible: visibleNow,
+          barTransform: bar.style.transform,
+          dirty: /\[object Object\]|undefined|NaN/.test(document.getElementById('quest').innerText)
+        };
+      }
+
+      if (!probedTimer) {                             /* 第一次开题：验时限条 */
+        probedTimer = true;
+        out.timerVisibleOnQuest = visibleNow;
+        const t1 = bar.style.transform;
+        await nap(750);
+        out.timerCountsDown = t1 !== bar.style.transform;
+        const clicked = document.querySelectorAll('.quest-opt')[0];
+        if (clicked) clicked.click();                  /* 点一个选项：不能崩 */
+        await nap(300);
+        close();
+        await nap(200);
+        out.timerStopsOnClose = timerEl.classList.contains('hidden');
+        continue;                                      /* 本轮不再走下面的关题分支 */
+      }
+
+      if (tone) break;
+      close();
+      await nap(180);
+    }
+    out.opened = opened;
+    out.tone = tone;
+    return out;
+  });
+
   await page.close();
   await page2.close();
   await page3.close();
+  await page4.close();
   await browser.close();
   clearTimeout(hard);
 
-  console.log(JSON.stringify({ pages: results, behavior, quest, pyFallback }, null, 1));
+  console.log(JSON.stringify(
+    { pages: results, behavior, quest, pyFallback, gameplay, gameplayErrors: gErr.filter(e => !EXPECTED.test(e)) },
+    null, 1));
 })().catch(e => { console.error('SMOKE FAILED:', e); process.exit(1); });

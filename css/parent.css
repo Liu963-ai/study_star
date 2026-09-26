@@ -145,10 +145,13 @@
   content:""; position:absolute; left:3px; top:3px;
   width:26px; height:26px; border-radius:50%;
   background:#fff; box-shadow:0 1px 4px rgba(0,0,0,.15);
-  transition:left .2s ease-out;
+  /* 滑块位移走 transform：切换开关时只做合成，不触发布局
+     （原来过渡 left，每帧都要重新布局一次） */
+  transform:translateX(0);
+  transition:transform .2s ease-out;
 }
 .switch.on{ background:var(--primary); }
-.switch.on::after{ left:23px; }
+.switch.on::after{ transform:translateX(20px); }   /* 原 left:3px→23px 的 20px 位移 */
 /* 翻屏按钮 */
 .rep-nav{ display:flex; gap:12px; justify-content:center; margin-top:14px; }
 .rep-nav .p-btn{ min-width:120px; }

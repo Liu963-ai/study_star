@@ -106,17 +106,20 @@
 .block.who{ background:linear-gradient(160deg, var(--c-pinyin-hi), var(--c-pinyin)); }
 .block.where{ background:linear-gradient(160deg, var(--c-shengzi-hi), var(--c-shengzi)); }
 .block.what{ background:linear-gradient(160deg, var(--primary-hi), var(--primary)); }
-/* 拖动中：随手指方向轻微倾斜（≤6°）+ 阴影加深 */
+/* 拖动中：随手指方向轻微倾斜（≤6°）+ 阴影加深
+   left/top 归零、位移全交给 transform：拖动时每个 pointermove 只改
+   transform，不再逐帧重排，低端平板上跟手更稳。 */
 .block.dragging{
   position:fixed; z-index:40;
+  left:0; top:0;
   box-shadow:0 12px 26px rgba(0,0,0,.16);
   cursor:grabbing;
 }
 /* 吸附成功：弹一下（弹簧缩放） */
 @keyframes blockPop{ 0%{transform:scale(1);} 45%{transform:scale(1.08);} 100%{transform:scale(1);} }
 .block.pop{ animation:blockPop .3s ease-out; }
-/* 拖错：积木弹回原位 */
-.block.returning{ transition:left .25s ease-out, top .25s ease-out; }
+/* 拖错：积木弹回原位（同样只过渡 transform，不触发布局） */
+.block.returning{ transition:transform .25s ease-out; }
 
 @media (max-width:700px){
   .slot{ width:30vw; height:92px; }

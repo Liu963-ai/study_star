@@ -32,9 +32,9 @@ def _assert_allowed():
 
 _assert_allowed()
 
-VOICE = "zh-CN-XiaoyiNeural"      # 用户当前所选音色
+VOICE = "zh-CN-XiaoyiNeural"      # 用户当前所选音色（全局统一发音人）
 RATE = -5                          # 默认语速档
-CONC = 1                           # 上游限流期降为单并发温和续跑（缓存命中秒过，断点可续）
+CONC = 3                           # 上游可合成但偏慢：3 路并发平衡速度与稳定
 
 corpus = json.load(open(r"D:\ZCODE\汉字小星球\tools\prewarm_corpus.json", encoding="utf-8"))
 texts = corpus["texts"]

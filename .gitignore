@@ -21,3 +21,6 @@ _shengzi_data.txt
 assets/tree-motion/src/
 # 词语乐园旧版场景插图 20 张（DATA.jushi[].img 字段当前无消费者，见 js/data.js 注释）
 assets/jushi/
+
+# 预合成运行日志（工具产物）
+prewarm_log.txt

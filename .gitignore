@@ -24,3 +24,5 @@ assets/jushi/
 
 # 预合成运行日志（工具产物）
 prewarm_log.txt
+fill_log.txt
+tools/fill_log.txt

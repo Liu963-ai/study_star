@@ -215,10 +215,13 @@ window.HHTTS = (function () {
       for (const ann of uniq) {
         const key = keyFor(ann, GLOBAL.rate, GLOBAL.pitch);
         if (mem.has(key)) { filled++; continue; }
-        /* ① 官方录音包（未启用开关、或已确认目录为空，则整轮跳过） */
+        /* ① 打包/官方录音包：先找 .wav（本地提取的 TTS 打包），再找
+              .mp3（未来放入的官方录音），命中即入库不再依赖云端 */
         if (packOn && !officialAudioMissing()) {
           try {
-            const r = await fetch(OFFICIAL_DIR + '/' + encodeURIComponent(ann) + '.mp3');
+            const base = OFFICIAL_DIR + '/' + encodeURIComponent(ann);
+            let r = await fetch(base + '.wav');
+            if (!r.ok) r = await fetch(base + '.mp3');
             if (r.ok) {
               const blob = await r.blob();
               await bankPut(ann, blob);

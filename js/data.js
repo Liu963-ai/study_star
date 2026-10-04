@@ -32,11 +32,10 @@ const DATA = {
   /* 官方拼音录音包：把官方录音（人教社 / 国家中小学智慧教育平台）按
      「拼音标注.mp3」放进 assets/pinyin-audio/ 后，把下面这行改成 true。
      详见 assets/pinyin-audio/README.txt。
-     为什么需要显式开关：目录里只有说明文件时，代码无从得知「用户还没装」
-     还是「装了但路径写错」，只能发一次探测请求去问——那会稳定产生一次
-     404，控制台留一条红色报错、每次首访白跑一个网络往返。默认 false
-     时完全不探测该目录，装好后置 true 才启用。 */
-  pinyinAudioPack: false,
+     当前为 true：目录内已打包 209/252 条 TTS 预合成语音（<标注>.wav，
+     由 tools/extract_pinyin_audio.py 从本地缓存提取），覆盖拼音页绝大
+     部分读音，未命中的自动回退统一发音人 TTS。 */
+  pinyinAudioPack: true,
 
   /* ---- 拼音全表（分组）----
      p=拼音  read=呼读音（点击大卡朗读它，TTS 读汉字而非英文字母）

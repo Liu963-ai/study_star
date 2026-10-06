@@ -318,7 +318,6 @@
   /* 星星音效（HH.sfx） */
   function sfxStar() { if (window.HH && HH.sfx) HH.sfx.star(); }
 
-  /* ---- 启动：先渲染第一篇第一句（修复打开空白），并自动听一遍 ---- */
+  /* ---- 启动：渲染第一篇第一句即可，引导音改由「教程」按钮按需播放 ---- */
   render();
-  setTimeout(() => speak('欢迎来到朗读剧场，我们先听一听', { onend: playSentence }), 400);
 })();

@@ -58,8 +58,7 @@
     }
   }
 
-  /* ---- 进入播报（话术表内句子）---- */
-  setTimeout(() => speak('今天的探险结束啦，小树又长高了一点。'), 400);
+  /* ---- 进入不再自动播报；说明改由「教程」按钮按需播放 ---- */
 
   /* ---- 回到我的星球 ---- */
   document.getElementById('endHome').addEventListener('click', () => {

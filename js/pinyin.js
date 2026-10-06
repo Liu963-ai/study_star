@@ -357,9 +357,6 @@
     btn.addEventListener('pointercancel', pressEnd);
   });
 
-  /* ---- 进入页面：先引导，再读当前拼音（呼读音） ---- */
+  /* ---- 进入页面：渲染即可，引导音改由顶栏「教程」按钮按需播放 ---- */
   paint();
-  setTimeout(() => {
-    speak('欢迎来到拼音星球，先听我读，再跟着读一遍。', { onend: playLetter });
-  }, 500);
 })();

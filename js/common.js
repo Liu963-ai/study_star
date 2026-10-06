@@ -317,6 +317,27 @@ window.HH = (function () {
         window.HHTTS && window.HHTTS.ensurePinyinBank) {
       setTimeout(() => window.HHTTS.ensurePinyinBank(), 900);
     }
+    /* 4) 「教程」按钮：独立入口，仅用户点击时播放本页教程
+          （替代旧的打开页面自动播报引导音；无顶栏的页面右上角浮动） */
+    const tutorial = window.HHTTS && window.HHTTS.tutorialFor
+      ? window.HHTTS.tutorialFor(location.pathname)
+      : null;
+    if (tutorial) {
+      const bar = document.querySelector('.learn-bar') || document.querySelector('.topbar');
+      const btn = document.createElement('button');
+      btn.className = 'btn-tutorial pressable';
+      btn.setAttribute('aria-label', '播放教程');
+      btn.innerHTML = '<span>📖</span><span>教程</span>';
+      btn.addEventListener('click', () => {
+        if (window.HH) HH.sfx.tap();
+        speak(tutorial);
+      });
+      if (bar) bar.appendChild(btn);
+      else {
+        btn.classList.add('btn-tutorial-float');
+        document.body.appendChild(btn);
+      }
+    }
   }
 
   /* ================= 通用绑定 ================= */

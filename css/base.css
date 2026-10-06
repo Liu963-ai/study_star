@@ -240,3 +240,16 @@ img,video,svg{ display:block; }
   .btn-sub{ font-size:20px; padding:0 18px; }
   .star-pill{ font-size:20px; padding:0 16px; }
 }
+
+/* ---------- 「教程」按钮：独立入口，仅点击时播放本页教程 ---------- */
+.btn-tutorial{
+  min-height:48px; padding:0 18px; border-radius:999px;
+  background:#fff; color:var(--primary);
+  border:2px solid var(--primary);
+  font-size:18px; font-weight:bold;
+  display:inline-flex; align-items:center; gap:6px;
+  box-shadow:var(--shadow-card);
+  flex:none;
+}
+.btn-tutorial:active{ transform:scale(.95); }
+.btn-tutorial-float{ position:fixed; right:20px; top:20px; z-index:50; }

@@ -569,11 +569,26 @@ window.HHTTS = (function () {
     return { cancel: stop };
   }
 
+  /* ================= 教程内容：仅在用户点击「教程」按钮时播放 =================
+     （替代旧的「打开页面自动播报引导音」机制，验收清单 §全局语音） */
+  const TUTORIALS = {
+    'pinyin.html': '欢迎来到拼音星球！点击大字母卡听这个拼音的标准读音；下面四个小卡片练四个声调，点「连读」可以从第一声连读到最后；右边的卡片点一点，听拼音组成的词语。长按绿色话筒，你也可以跟着读。',
+    'shengzi.html': '欢迎来到生字森林！看田字格里的字跟着写，点「下一个字」换新字，点「上一个字」回头复习，点词语卡片可以听读音。',
+    'langdu.html': '欢迎来到朗读剧场！点句子听朗读，点「下一句」继续，也可以点「慢速」听得更清楚，读完给自己打打分吧。',
+    'jushi.html': '欢迎来到词语乐园！把彩色积木拖进格子里，拼成一句话，拼对了会有一幅漂亮的图画哦。',
+    'ditu.html': '欢迎来到闯关地图！点击发光的关卡回答问题，答对啦小火车就开往下一站，全部通过有大奖！',
+    'jiesuan.html': '这是结算页：你刚刚完成了一关，星星已经收进星星罐，小树也长高了一点，点「继续下一站」接着探险吧。'
+  };
+  function tutorialFor(page) {
+    page = (page || '').split('/').pop();
+    return TUTORIALS[page] || null;
+  }
+
   /* 对外接口 */
   return { speak: speak, stop: stop, ping: ping, prewarm: prewarm, unlockAudio: unlockAudio,
            pinyinVoiceId: pinyinVoiceId,
            getSettings: getSettings,
-           ensurePinyinBank: ensurePinyinBank, syllableOf: syllableOf,
+           ensurePinyinBank: ensurePinyinBank, syllableOf: syllableOf, tutorialFor: tutorialFor,
            /* 标调与语音库清单：与 pinyin.js 共用同一份实现，勿在别处另写一份 */
            addTone: addTone, toneBase: toneBase, pinyinBankList: pinyinBankList,
            synthForm: synthForm,

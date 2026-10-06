@@ -356,6 +356,13 @@
   function levelComplete(fast) {
     stopTimer();
     sfx.ok();
+    /* 重玩旧关（curLevel < level）：答对只给鼓励，不推进关卡，
+       否则重玩第 1 关会把关卡数跳到未学过的关（越级 bug） */
+    if (curLevel < level) {
+      speak('答对啦！这是复习，再往前挑战新关卡吧');
+      paint();
+      return;
+    }
     speak(fast ? '答对啦，又快又准！小火车出发喽' : '答对啦！小火车出发喽');
     if (level < TOTAL) {
       level++;
